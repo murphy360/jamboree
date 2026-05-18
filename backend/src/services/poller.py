@@ -1,14 +1,20 @@
 import asyncio
 import logging
+from typing import Protocol
 
-from src.services.tile_client import TileClient
 from src.services.ws_manager import WebSocketManager
 
 LOGGER = logging.getLogger(__name__)
 
 
+class TrackerClient(Protocol):
+    async def list_tiles(self) -> list: ...
+
+    async def get_tile_location(self, tile_uuid: str, label: str): ...
+
+
 class TilePoller:
-    def __init__(self, tile_client: TileClient, ws_manager: WebSocketManager, interval_seconds: int) -> None:
+    def __init__(self, tile_client: TrackerClient, ws_manager: WebSocketManager, interval_seconds: int) -> None:
         self.tile_client = tile_client
         self.ws_manager = ws_manager
         self.interval_seconds = interval_seconds

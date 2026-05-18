@@ -10,7 +10,13 @@ class Settings(BaseSettings):
     app_name: str = "jamboree-tracker-backend"
     tile_email: str = ""
     tile_password: str = ""
+    tile_app_id: str = ""
+    tile_app_version: str = ""
     tile_api_base_url: str = "https://production.tile-api.com/api/v1"
+    home_assistant_url: str = "http://localhost:8123"
+    home_assistant_token: str = ""
+    home_assistant_tile_entities: str = ""
+    home_assistant_exclude_entities: str = ""
     tile_poll_interval_seconds: int = Field(default=15, ge=5, le=300)
     backend_cors_origins: str = "http://localhost:5173"
 
@@ -18,6 +24,12 @@ class Settings(BaseSettings):
 class HealthResponse(BaseModel):
     status: str
     app_name: str
+
+
+class TileStatusResponse(BaseModel):
+    ok: bool
+    tile_count: int = 0
+    detail: str
 
 
 @lru_cache

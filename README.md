@@ -2,12 +2,12 @@
 
 Docker-first tracking platform for National Jamboree operations. The project starts with two core services:
 
-- `backend`: FastAPI service that integrates with Tile APIs and streams live locations over WebSocket.
+- `backend`: FastAPI service that reads Tile tracker states from Home Assistant and streams live locations over WebSocket.
 - `frontend`: React web app that renders live tracker positions on a map.
 
 ## Quick Start
 
-1. Create a live env file from the example and set Tile credentials:
+1. Create a live env file from the example and set Home Assistant access:
 
 ```bash
 Copy-Item backend/.env.example backend/.env
@@ -20,8 +20,12 @@ Copy-Item .env.example .env
 ```
 
 Set these values in `backend/.env`:
-- `TILE_EMAIL`
-- `TILE_PASSWORD`
+- `HOME_ASSISTANT_URL` (for your setup: `http://192.168.68.82:8123`)
+- `HOME_ASSISTANT_TOKEN` (Long-Lived Access Token)
+- `HOME_ASSISTANT_TILE_ENTITIES` (optional comma-separated filter, e.g. `device_tracker.tile_keys,device_tracker.tile_daypack`)
+- `HOME_ASSISTANT_EXCLUDE_ENTITIES` (optional comma-separated entity IDs to ignore, e.g. `device_tracker.corey_s_s25_ultra`)
+
+If `HOME_ASSISTANT_TILE_ENTITIES` is empty, backend auto-discovers Tile trackers by scanning `device_tracker.*` entities that include `tile` in entity id or friendly name.
 
 2. Start the stack:
 
@@ -56,7 +60,7 @@ docker compose exec frontend npm run lint
 ## Current Status
 
 - FastAPI health endpoint implemented.
-- Tile client adapter and polling worker scaffolded.
+- Home Assistant tracker client and polling worker scaffolded.
 - WebSocket endpoint (`/ws/locations`) implemented.
 - React map UI scaffolded with live WebSocket updates.
 

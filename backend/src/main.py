@@ -5,8 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.routes import router
 from src.core.settings import get_settings
+from src.services.home_assistant_client import HomeAssistantTileClient
 from src.services.poller import TilePoller
-from src.services.tile_client import TileClient
 from src.services.ws_manager import WebSocketManager
 
 settings = get_settings()
@@ -22,11 +22,13 @@ app.add_middleware(
 
 app.include_router(router)
 ws_manager = WebSocketManager()
-tile_client = TileClient(
-    base_url=settings.tile_api_base_url,
-    email=settings.tile_email,
-    password=settings.tile_password,
+tile_client = HomeAssistantTileClient(
+    base_url=settings.home_assistant_url,
+    token=settings.home_assistant_token,
+    tile_entities=settings.home_assistant_tile_entities,
+    exclude_entities=settings.home_assistant_exclude_entities,
 )
+app.state.tile_client = tile_client
 poller = TilePoller(tile_client, ws_manager, settings.tile_poll_interval_seconds)
 poller_task: asyncio.Task | None = None
 
