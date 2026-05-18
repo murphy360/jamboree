@@ -1,10 +1,13 @@
 import { useTileLocations } from "./hooks/useTileLocations";
+import { useSystemStatus } from "./hooks/useSystemStatus";
 import { LiveMap } from "./components/LiveMap";
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:18000";
 const WS_URL = import.meta.env.VITE_WS_URL ?? "ws://localhost:18000/ws/locations";
 
 export function App() {
   const { locations, connected } = useTileLocations(WS_URL);
+  const { backendConnected, homeAssistantConnected, tileCount } = useSystemStatus(BACKEND_URL);
   const sortedTiles = [...locations].sort((a, b) => a.label.localeCompare(b.label));
 
   return (
@@ -12,10 +15,16 @@ export function App() {
       <header className="app-header">
         <h1>Jamboree Live Tracker</h1>
         <p>
-          Connected: <strong>{connected ? "Yes" : "No"}</strong>
+          Backend Connected: <strong>{backendConnected ? "Yes" : "No"}</strong>
         </p>
         <p>
-          Active Tiles: <strong>{locations.length}</strong>
+          Home Assistant Connected: <strong>{homeAssistantConnected ? "Yes" : "No"}</strong>
+        </p>
+        <p>
+          WebSocket Connected: <strong>{connected ? "Yes" : "No"}</strong>
+        </p>
+        <p>
+          Active Tiles: <strong>{tileCount || locations.length}</strong>
         </p>
       </header>
 
