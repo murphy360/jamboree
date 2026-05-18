@@ -27,6 +27,7 @@ tile_client = HomeAssistantTileClient(
     token=settings.home_assistant_token,
     tile_entities=settings.home_assistant_tile_entities,
     exclude_entities=settings.home_assistant_exclude_entities,
+    require_hash=settings.home_assistant_require_hash,
 )
 app.state.tile_client = tile_client
 poller = TilePoller(tile_client, ws_manager, settings.tile_poll_interval_seconds)

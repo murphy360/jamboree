@@ -15,11 +15,13 @@ class HomeAssistantTileClient:
         token: str,
         tile_entities: str = "",
         exclude_entities: str = "",
+        require_hash: bool = True,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.entity_filter = [item.strip() for item in tile_entities.split(",") if item.strip()]
         self.entity_exclude = {item.strip() for item in exclude_entities.split(",") if item.strip()}
+        self.require_hash = require_hash
         self._state_cache: dict[str, dict[str, Any]] = {}
 
     def _headers(self) -> dict[str, str]:
@@ -80,6 +82,14 @@ class HomeAssistantTileClient:
 
     @staticmethod
     def _best_label(entity_id: str, attrs: dict[str, Any]) -> str:
+        friendly_name = str(attrs.get("friendly_name") or "").strip()
+        if "#" in friendly_name:
+            return friendly_name
+
+        explicit_name = str(attrs.get("name") or "").strip()
+        if "#" in explicit_name:
+            return explicit_name
+
         model = str(attrs.get("model") or "").strip()
         if model:
             return model
@@ -97,6 +107,15 @@ class HomeAssistantTileClient:
             return suffix.title()
 
         return friendly_name or entity_id
+
+    @staticmethod
+    def _contains_hash(state: dict[str, Any]) -> bool:
+        entity_id = str(state.get("entity_id") or "")
+        attrs = state.get("attributes") or {}
+        friendly_name = str(attrs.get("friendly_name") or "")
+        explicit_name = str(attrs.get("name") or "")
+        model = str(attrs.get("model") or "")
+        return any("#" in value for value in (entity_id, friendly_name, explicit_name, model))
 
     @staticmethod
     def _to_summary(state: dict[str, Any]) -> TileSummary | None:
@@ -147,6 +166,9 @@ class HomeAssistantTileClient:
             for item in states
             if str(item.get("entity_id") or "") not in self.entity_exclude
         ]
+
+        if self.require_hash:
+            states = [item for item in states if self._contains_hash(item)]
 
         self._state_cache = {
             str(item.get("entity_id")): item

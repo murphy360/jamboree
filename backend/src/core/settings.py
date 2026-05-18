@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     home_assistant_token: str = ""
     home_assistant_tile_entities: str = ""
     home_assistant_exclude_entities: str = ""
+    home_assistant_require_hash: bool = True
     tile_poll_interval_seconds: int = Field(default=15, ge=5, le=300)
     backend_cors_origins: str = "http://localhost:5173"
 
