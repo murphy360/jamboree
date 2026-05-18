@@ -1,0 +1,20 @@
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+extend-exclude = [".venv", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "C90", "PLR", "PTH", "SIM"]
+ignore = ["PLR2004"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-args = 6
+max-branches = 12
+max-returns = 6
+max-statements = 45
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

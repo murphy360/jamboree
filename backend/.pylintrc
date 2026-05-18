@@ -1,0 +1,21 @@
+[MASTER]
+fail-under=9.0
+
+[MESSAGES CONTROL]
+disable=missing-module-docstring,missing-class-docstring,missing-function-docstring
+
+[FORMAT]
+max-line-length=88
+
+[DESIGN]
+max-module-lines=400
+max-args=6
+max-branches=12
+max-returns=6
+max-statements=45
+max-locals=20
+max-parents=7
+max-attributes=10
+
+[SIMILARITIES]
+min-similarity-lines=6
