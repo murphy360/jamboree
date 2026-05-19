@@ -8,20 +8,56 @@ const _host = typeof window !== "undefined" ? window.location.hostname : "localh
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? `http://${_host}:18000`;
 const WS_URL = import.meta.env.VITE_WS_URL ?? `ws://${_host}:18000/ws/locations`;
 const BREADCRUMB_OPTIONS = [10, 25, 50, 100];
+const DEFAULT_ORANGE_AFTER_MINUTES = 60;
+const DEFAULT_RED_AFTER_MINUTES = 360;
 
-function formatTimestamp(value: string | null | undefined): string {
-  if (!value) {
-    return "Unknown";
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "Unknown";
-  }
-  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  return `${date.toLocaleString()} (${zone})`;
+type AgeBandConfig = {
+  orangeAfterMinutes: number;
+  redAfterMinutes: number;
+};
+
+type TileListEntry = {
+  tile: TileLocation;
+  ageMs: number;
+  ageLabel: string;
+  color: string;
+};
+
+function getTileTimestamp(tile: TileLocation): string | null | undefined {
+  return tile.tile_service_observed_at ?? tile.observed_at ?? tile.polled_at;
 }
 
-function formatAge(value: string | null | undefined): string {
+function getTileAgeMs(value: string | null | undefined, referenceTimeMs: number): number {
+  if (!value) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return Math.max(0, referenceTimeMs - timestamp);
+}
+
+function getTileColor(ageMs: number, config: AgeBandConfig): string {
+  if (!Number.isFinite(ageMs)) {
+    return "#dc2626";
+  }
+
+  const ageMinutes = Math.floor(ageMs / 60_000);
+  if (ageMinutes >= config.redAfterMinutes) {
+    return "#dc2626";
+  }
+
+  if (ageMinutes >= config.orangeAfterMinutes) {
+    return "#f97316";
+  }
+
+  return "#2563eb";
+}
+
+function formatAge(value: string | null | undefined, referenceTimeMs: number): string {
   if (!value) {
     return "Unknown";
   }
@@ -31,7 +67,7 @@ function formatAge(value: string | null | undefined): string {
     return "Unknown";
   }
 
-  const elapsedMs = Date.now() - timestamp;
+  const elapsedMs = referenceTimeMs - timestamp;
   if (elapsedMs <= -60_000) {
     const futureMinutes = Math.floor(Math.abs(elapsedMs) / 60_000);
     if (futureMinutes < 60) {
@@ -64,15 +100,72 @@ function formatAge(value: string | null | undefined): string {
   return remainingHours > 0 ? `${days} d ${remainingHours} hr ago` : `${days} d ago`;
 }
 
+function formatCompactAge(value: string | null | undefined, referenceTimeMs: number): string {
+  if (!value) {
+    return "Unknown";
+  }
+
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) {
+    return "Unknown";
+  }
+
+  const ageMs = referenceTimeMs - timestamp;
+  if (ageMs < 60_000) {
+    return "Now";
+  }
+
+  const totalMinutes = Math.floor(ageMs / 60_000);
+  if (totalMinutes < 60) {
+    return `${totalMinutes}m`;
+  }
+
+  const totalHours = Math.floor(totalMinutes / 60);
+  if (totalHours < 24) {
+    return `${totalHours}hr`;
+  }
+
+  const totalDays = Math.floor(totalHours / 24);
+  return `${totalDays}d`;
+}
+
 export function App() {
   const { locations, connected } = useTileLocations(WS_URL);
   const { backendConnected, homeAssistantConnected, tileCount } = useSystemStatus(BACKEND_URL);
   const [selectedTileUuid, setSelectedTileUuid] = useState<string | null>(null);
   const [breadcrumbLimit, setBreadcrumbLimit] = useState(10);
+  const [orangeAfterMinutes, setOrangeAfterMinutes] = useState(DEFAULT_ORANGE_AFTER_MINUTES);
+  const [redAfterMinutes, setRedAfterMinutes] = useState(DEFAULT_RED_AFTER_MINUTES);
+  const [currentTimeMs, setCurrentTimeMs] = useState(() => Date.now());
   const selectedTile = locations.find((item) => item.tile_uuid === selectedTileUuid) ?? null;
   const { history, loading } = useTileHistory(BACKEND_URL, selectedTileUuid);
-  const sortedTiles = [...locations].sort((a, b) => a.label.localeCompare(b.label));
   const displayedHistory = history.slice(-breadcrumbLimit).reverse();
+  const ageBandConfig: AgeBandConfig = {
+    orangeAfterMinutes,
+    redAfterMinutes,
+  };
+  const sortedTiles: TileListEntry[] = [...locations]
+    .map((tile) => {
+      const timestamp = getTileTimestamp(tile);
+      const ageMs = getTileAgeMs(timestamp, currentTimeMs);
+      return {
+        tile,
+        ageMs,
+        ageLabel: formatCompactAge(timestamp, currentTimeMs),
+        color: getTileColor(ageMs, ageBandConfig),
+      };
+    })
+    .sort((a, b) => {
+      if (a.ageMs !== b.ageMs) {
+        return b.ageMs - a.ageMs;
+      }
+
+      return a.tile.label.localeCompare(b.tile.label);
+    });
+  const tileColorByUuid = sortedTiles.reduce<Record<string, string>>((acc, entry) => {
+    acc[entry.tile.tile_uuid] = entry.color;
+    return acc;
+  }, {});
   // Color for historical breadcrumbs (teal for live, orange for history)
   const breadcrumbColor = "#f59e42"; // orange-400
 
@@ -82,6 +175,16 @@ export function App() {
     }
   }, [selectedTile, selectedTileUuid]);
 
+  useEffect(() => {
+    const ticker = setInterval(() => {
+      setCurrentTimeMs(Date.now());
+    }, 60_000);
+
+    return () => {
+      clearInterval(ticker);
+    };
+  }, []);
+
   const handleTileClick = (tile: TileLocation) => {
     setSelectedTileUuid(tile.tile_uuid);
     setBreadcrumbLimit(10);
@@ -89,6 +192,21 @@ export function App() {
 
   const handleMapClick = () => {
     setSelectedTileUuid(null);
+  };
+
+  const handleOrangeAfterMinutesChange = (value: number) => {
+    const safeOrange = Number.isFinite(value) ? Math.max(1, value) : DEFAULT_ORANGE_AFTER_MINUTES;
+    setOrangeAfterMinutes(safeOrange);
+    if (redAfterMinutes <= safeOrange) {
+      setRedAfterMinutes(safeOrange + 1);
+    }
+  };
+
+  const handleRedAfterMinutesChange = (value: number) => {
+    const safeRed = Number.isFinite(value)
+      ? Math.max(orangeAfterMinutes + 1, value)
+      : Math.max(orangeAfterMinutes + 1, DEFAULT_RED_AFTER_MINUTES);
+    setRedAfterMinutes(safeRed);
   };
 
   return (
@@ -116,32 +234,54 @@ export function App() {
         onMapClick={handleMapClick}
         breadcrumbs={displayedHistory}
         breadcrumbColor={breadcrumbColor}
+        tileColorByUuid={tileColorByUuid}
       />
 
       <details className="tile-list-panel" open>
         <summary>Tracked Tiles</summary>
+        <div className="tile-list-config">
+          <label htmlFor="orange-after-minutes">
+            Orange after (minutes)
+            <input
+              id="orange-after-minutes"
+              type="number"
+              min={1}
+              value={orangeAfterMinutes}
+              onChange={(event) => handleOrangeAfterMinutesChange(Number(event.target.value))}
+            />
+          </label>
+          <label htmlFor="red-after-minutes">
+            Red after (minutes)
+            <input
+              id="red-after-minutes"
+              type="number"
+              min={orangeAfterMinutes + 1}
+              value={redAfterMinutes}
+              onChange={(event) => handleRedAfterMinutesChange(Number(event.target.value))}
+            />
+          </label>
+        </div>
         {sortedTiles.length === 0 ? (
           <p className="tile-list-empty">No tile positions received yet.</p>
         ) : (
           <ul className="tile-list">
-            {sortedTiles.map((tile) => {
-              const tileServiceTimestamp = tile.tile_service_observed_at;
+            {sortedTiles.map((entry, index) => {
+              const tile = entry.tile;
 
               return (
                 <li key={tile.tile_uuid} className="tile-list-item">
                   <button
                     type="button"
                     className={tile.tile_uuid === selectedTileUuid ? "tile-list-button is-active" : "tile-list-button"}
+                    style={{ borderLeftColor: entry.color }}
                     onClick={() => handleTileClick(tile)}
                   >
-                    <h3>{tile.label}</h3>
-                    <p>ID: {tile.tile_uuid}</p>
-                    <p>
-                      Lat/Lng: {tile.latitude.toFixed(5)}, {tile.longitude.toFixed(5)}
-                    </p>
-                    <p>Tile Service Update: {formatTimestamp(tileServiceTimestamp)}</p>
-                    <p>Position Age: {formatAge(tileServiceTimestamp)}</p>
-                    <p>Last HA Poll: {formatTimestamp(tile.polled_at)}</p>
+                    <div className="tile-list-row">
+                      <h3>
+                        <span className="tile-list-rank">#{index + 1}.</span> {tile.label}
+                      </h3>
+                      <p className="tile-list-age">{entry.ageLabel}</p>
+                    </div>
                   </button>
                 </li>
               );
@@ -155,6 +295,9 @@ export function App() {
           <div>
             <p className="tile-history-kicker">Tile history</p>
             <h2>{selectedTile ? selectedTile.label : "Select a tile on the map"}</h2>
+            {selectedTile ? (
+              <p className="tile-history-meta">Position Age: {formatAge(getTileTimestamp(selectedTile), currentTimeMs)}</p>
+            ) : null}
           </div>
           {selectedTile ? (
             <div className="tile-history-toolbar">

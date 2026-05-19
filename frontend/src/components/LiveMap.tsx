@@ -11,6 +11,7 @@ type LiveMapProps = {
   onMapClick: () => void;
   breadcrumbs?: TileLocation[];
   breadcrumbColor?: string;
+  tileColorByUuid?: Record<string, string>;
 };
 
 const DEFAULT_CENTER: [number, number] = [38.076, -81.073];
@@ -57,30 +58,41 @@ function MapClickHandler({ onMapClick }: MapClickHandlerProps) {
   return null;
 }
 
-export function LiveMap({ locations, selectedTileUuid, onTileClick, onMapClick, breadcrumbs, breadcrumbColor }: LiveMapProps) {
+function createMarkerIcon(color: string, selected = false) {
+  const safeColor = color || "#2563eb";
+  const selectedClass = selected ? " tile-marker-shell-selected" : "";
+  const dotClass = selected ? "tile-marker-dot tile-marker-dot-selected" : "tile-marker-dot";
+  const selectedRing = selected ? "box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35), 0 3px 10px rgba(15, 23, 42, 0.35);" : "";
+
+  return divIcon({
+    className: `tile-marker-shell${selectedClass}`,
+    html: `<span class='${dotClass}' style='background:${safeColor};${selectedRing}'></span>`,
+    iconSize: point(18, 18),
+    iconAnchor: point(9, 9),
+  });
+}
+
+export function LiveMap({ locations, selectedTileUuid, onTileClick, onMapClick, breadcrumbs, breadcrumbColor, tileColorByUuid }: LiveMapProps) {
   // Find the selected tile's current position for highlighting
   const selected = selectedTileUuid ? locations.find((t) => t.tile_uuid === selectedTileUuid) : null;
-  const markerIcon = useMemo(
-    () =>
-      divIcon({
-        className: "tile-marker-shell",
-        html: "<span class='tile-marker-dot'></span>",
-        iconSize: point(18, 18),
-        iconAnchor: point(9, 9),
-      }),
-    [],
-  );
+  const markerIcons = useMemo(() => {
+    const icons = new Map<string, ReturnType<typeof divIcon>>();
 
-  const selectedMarkerIcon = useMemo(
-    () =>
-      divIcon({
-        className: "tile-marker-shell tile-marker-shell-selected",
-        html: "<span class='tile-marker-dot tile-marker-dot-selected'></span>",
-        iconSize: point(18, 18),
-        iconAnchor: point(9, 9),
-      }),
-    [],
-  );
+    locations.forEach((item) => {
+      const color = tileColorByUuid?.[item.tile_uuid] ?? "#2563eb";
+      if (!icons.has(color)) {
+        icons.set(color, createMarkerIcon(color));
+      }
+
+      if (!icons.has(`${color}:selected`)) {
+        icons.set(`${color}:selected`, createMarkerIcon(color, true));
+      }
+    });
+
+    return icons;
+  }, [locations, tileColorByUuid]);
+
+  const selectedMarkerColor = selected ? tileColorByUuid?.[selected.tile_uuid] ?? "#2563eb" : "#2563eb";
 
   return (
     <section className="map-frame">
@@ -98,7 +110,11 @@ export function LiveMap({ locations, selectedTileUuid, onTileClick, onMapClick, 
           <Marker
             key={item.tile_uuid}
             position={[item.latitude, item.longitude]}
-            icon={item.tile_uuid === selectedTileUuid ? selectedMarkerIcon : markerIcon}
+            icon={
+              item.tile_uuid === selectedTileUuid
+                ? markerIcons.get(`${tileColorByUuid?.[item.tile_uuid] ?? "#2563eb"}:selected`) ?? createMarkerIcon("#2563eb", true)
+                : markerIcons.get(tileColorByUuid?.[item.tile_uuid] ?? "#2563eb") ?? createMarkerIcon("#2563eb")
+            }
             opacity={item.tile_uuid === selectedTileUuid ? 1 : 0.85}
             zIndexOffset={item.tile_uuid === selectedTileUuid ? 1000 : 0}
             eventHandlers={{
@@ -122,7 +138,7 @@ export function LiveMap({ locations, selectedTileUuid, onTileClick, onMapClick, 
           <CircleMarker
             center={[selected.latitude, selected.longitude]}
             radius={14}
-            pathOptions={{ color: "#0f766e", weight: 2.5, fillOpacity: 0, opacity: 0.45, dashArray: "2 6" }}
+            pathOptions={{ color: selectedMarkerColor, weight: 2.5, fillOpacity: 0, opacity: 0.55, dashArray: "2 6" }}
             interactive={false}
           />
         )}

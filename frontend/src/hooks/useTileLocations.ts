@@ -89,21 +89,23 @@ export function useTileLocations(url: string) {
         return;
       }
 
-      if (socket.readyState === WebSocket.CONNECTING) {
+      const activeSocket = socket;
+
+      if (activeSocket.readyState === WebSocket.CONNECTING) {
         // In React StrictMode, effects mount/unmount twice in dev. Delay close
         // until the connection opens to avoid noisy "closed before established" logs.
-        socket.addEventListener(
+        activeSocket.addEventListener(
           "open",
           () => {
-            socket.close();
+            activeSocket.close();
           },
           { once: true },
         );
         return;
       }
 
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.close();
+      if (activeSocket.readyState === WebSocket.OPEN) {
+        activeSocket.close();
       }
     };
   }, [normalizedUrl]);
