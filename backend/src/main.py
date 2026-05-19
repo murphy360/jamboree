@@ -44,6 +44,7 @@ tile_client = HomeAssistantTileClient(
 app.state.tile_client = tile_client
 app.state.history_store = history_store
 poller = TilePoller(tile_client, ws_manager, history_store, settings.tile_poll_interval_seconds)
+app.state.poller = poller
 poller_task: asyncio.Task | None = None
 
 
@@ -64,6 +65,13 @@ async def shutdown() -> None:
 @app.websocket("/ws/locations")
 async def locations_ws(websocket: WebSocket) -> None:
     await ws_manager.connect(websocket)
+    latest = history_store.get_latest_locations()
+    await websocket.send_json(
+        {
+            "type": "tile_locations",
+            "items": [item.model_dump(mode="json") for item in latest],
+        }
+    )
     try:
         while True:
             # Keep the socket alive; frontend may send pings.

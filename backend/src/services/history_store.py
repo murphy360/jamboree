@@ -19,14 +19,17 @@ class TileHistoryStore:
 
     def _init_schema(self) -> None:
         with self._lock:
+            self._connection.execute("DROP TABLE IF EXISTS tile_history")
             self._connection.execute(
                 """
-                CREATE TABLE IF NOT EXISTS tile_history (
+                CREATE TABLE tile_history (
                     tile_uuid TEXT NOT NULL,
                     label TEXT NOT NULL,
                     latitude REAL NOT NULL,
                     longitude REAL NOT NULL,
                     observed_at TEXT NOT NULL,
+                    tile_service_observed_at TEXT,
+                    polled_at TEXT,
                     observed_at_second TEXT NOT NULL,
                     PRIMARY KEY (tile_uuid, observed_at_second)
                 )
@@ -34,7 +37,7 @@ class TileHistoryStore:
             )
             self._connection.execute(
                 """
-                CREATE INDEX IF NOT EXISTS idx_tile_history_tile_observed
+                CREATE INDEX idx_tile_history_tile_observed
                 ON tile_history (tile_uuid, observed_at DESC)
                 """
             )
@@ -60,15 +63,19 @@ class TileHistoryStore:
                     latitude,
                     longitude,
                     observed_at,
+                    tile_service_observed_at,
+                    polled_at,
                     observed_at_second
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(tile_uuid, observed_at_second)
                 DO UPDATE SET
                     label = excluded.label,
                     latitude = excluded.latitude,
                     longitude = excluded.longitude,
-                    observed_at = excluded.observed_at
+                    observed_at = excluded.observed_at,
+                    tile_service_observed_at = excluded.tile_service_observed_at,
+                    polled_at = excluded.polled_at
                 """,
                 (
                     location.tile_uuid,
@@ -76,6 +83,8 @@ class TileHistoryStore:
                     location.latitude,
                     location.longitude,
                     location.observed_at.isoformat(),
+                    location.tile_service_observed_at.isoformat() if location.tile_service_observed_at else None,
+                    location.polled_at.isoformat() if location.polled_at else None,
                     observed_at_second,
                 ),
             )
@@ -103,12 +112,30 @@ class TileHistoryStore:
         with self._lock:
             rows = self._connection.execute(
                 """
-                SELECT tile_uuid, latitude, longitude, observed_at, label
+                SELECT tile_uuid, latitude, longitude, observed_at, label, tile_service_observed_at, polled_at
                 FROM tile_history
                 WHERE tile_uuid = ?
                 ORDER BY observed_at ASC
                 """,
                 (tile_uuid,),
+            ).fetchall()
+        return [TileLocation.model_validate(dict(row)) for row in rows]
+
+    def get_latest_locations(self) -> list[TileLocation]:
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT h.tile_uuid, h.latitude, h.longitude, h.observed_at, h.label, h.tile_service_observed_at, h.polled_at
+                FROM tile_history h
+                WHERE h.rowid = (
+                    SELECT x.rowid
+                    FROM tile_history x
+                    WHERE x.tile_uuid = h.tile_uuid
+                    ORDER BY COALESCE(x.polled_at, x.observed_at) DESC, x.observed_at DESC, x.rowid DESC
+                    LIMIT 1
+                )
+                ORDER BY h.label ASC
+                """
             ).fetchall()
         return [TileLocation.model_validate(dict(row)) for row in rows]
 

@@ -23,42 +23,71 @@ export function useTileLocations(url: string) {
 
   useEffect(() => {
     if (!normalizedUrl) return;
-
-    const socket = new WebSocket(normalizedUrl);
     let isDisposed = false;
+    let socket: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-    socket.addEventListener("open", () => {
-      if (isDisposed) {
-        socket.close();
+    const scheduleReconnect = () => {
+      if (isDisposed || reconnectTimer) {
         return;
       }
-      setConnected(true);
-      socket.send("hello");
-    });
 
-    socket.addEventListener("close", () => {
-      if (isDisposed) {
-        return;
-      }
-      setConnected(false);
-    });
-
-    socket.addEventListener("message", (event) => {
-      if (isDisposed) {
-        return;
-      }
-      try {
-        const parsed = JSON.parse(event.data) as LocationMessage;
-        if (parsed.type === "tile_locations" && Array.isArray(parsed.items)) {
-          setLocations(parsed.items);
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        if (!isDisposed) {
+          connect();
         }
-      } catch {
-        // Ignore malformed messages; backend API is unofficial.
-      }
-    });
+      }, 1500);
+    };
+
+    const connect = () => {
+      const ws = new WebSocket(normalizedUrl);
+      socket = ws;
+
+      ws.addEventListener("open", () => {
+        if (isDisposed) {
+          ws.close();
+          return;
+        }
+        setConnected(true);
+        ws.send("hello");
+      });
+
+      ws.addEventListener("close", () => {
+        if (isDisposed) {
+          return;
+        }
+        setConnected(false);
+        scheduleReconnect();
+      });
+
+      ws.addEventListener("message", (event) => {
+        if (isDisposed) {
+          return;
+        }
+        try {
+          const parsed = JSON.parse(event.data) as LocationMessage;
+          if (parsed.type === "tile_locations" && Array.isArray(parsed.items)) {
+            setLocations(parsed.items);
+          }
+        } catch {
+          // Ignore malformed messages; backend API is unofficial.
+        }
+      });
+    };
+
+    connect();
 
     return () => {
       isDisposed = true;
+
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+      }
+
+      if (!socket) {
+        return;
+      }
 
       if (socket.readyState === WebSocket.CONNECTING) {
         // In React StrictMode, effects mount/unmount twice in dev. Delay close

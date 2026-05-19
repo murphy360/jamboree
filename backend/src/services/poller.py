@@ -28,22 +28,24 @@ class TilePoller:
         self.history_store = history_store
         self.interval_seconds = interval_seconds
         self._shutdown = asyncio.Event()
+        self._poll_lock = asyncio.Lock()
 
     async def stop(self) -> None:
         self._shutdown.set()
 
     async def run(self) -> None:
         while not self._shutdown.is_set():
-            await self._poll_once()
+            await self.poll_now()
             try:
                 await asyncio.wait_for(self._shutdown.wait(), timeout=self.interval_seconds)
             except TimeoutError:
                 continue
 
-    async def _poll_once(self) -> None:
-        if not self.ws_manager.has_connections():
-            return
+    async def poll_now(self) -> None:
+        async with self._poll_lock:
+            await self._poll_once()
 
+    async def _poll_once(self) -> None:
         try:
             tiles = await self.tile_client.list_tiles()
             updates: list[TileLocation] = []
@@ -54,10 +56,13 @@ class TilePoller:
 
             if updates:
                 self.history_store.record(updates)
+
+            if self.ws_manager.has_connections():
+                latest = self.history_store.get_latest_locations()
                 await self.ws_manager.broadcast(
                     {
                         "type": "tile_locations",
-                        "items": [item.model_dump(mode="json") for item in updates],
+                        "items": [item.model_dump(mode="json") for item in latest],
                     }
                 )
         except Exception as exc:
