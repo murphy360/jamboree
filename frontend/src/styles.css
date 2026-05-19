@@ -49,32 +49,6 @@ body {
   font-weight: 700;
 }
 
-.tile-list-config {
-  margin-top: 0.85rem;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 0.65rem;
-}
-
-.tile-list-config label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.55rem;
-  font-size: 0.88rem;
-  color: #334155;
-}
-
-.tile-list-config input {
-  width: 84px;
-  border: 1px solid #cbd5e1;
-  border-radius: 0.5rem;
-  background: #f8fafc;
-  color: #0f172a;
-  padding: 0.35rem 0.45rem;
-  font: inherit;
-}
-
 .tile-list-empty {
   margin: 0.85rem 0 0;
   color: #334155;
@@ -233,6 +207,36 @@ body {
   border: 1px solid #cbd5e1;
   border-radius: 0.75rem;
   overflow: hidden;
+}
+
+.map-panel {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.map-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.map-reset-button {
+  border: 1px solid #94a3b8;
+  border-radius: 0.6rem;
+  background: linear-gradient(180deg, #ffffff 0%, #e2e8f0 100%);
+  color: #0f172a;
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 0.45rem 0.75rem;
+  cursor: pointer;
+}
+
+.map-reset-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.map-reset-button:not(:disabled):hover {
+  border-color: #64748b;
 }
 
 .map-canvas {

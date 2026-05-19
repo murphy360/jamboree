@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { divIcon, point } from "leaflet";
 import { CircleMarker, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import { Breadcrumbs } from "./Breadcrumbs";
@@ -12,25 +12,39 @@ type LiveMapProps = {
   breadcrumbs?: TileLocation[];
   breadcrumbColor?: string;
   tileColorByUuid?: Record<string, string>;
+  fitSignal?: number;
 };
 
 const DEFAULT_CENTER: [number, number] = [38.076, -81.073];
 
 type FitToLocationsProps = {
   locations: TileLocation[];
+  fitSignal: number;
 };
 
-function FitToLocations({ locations }: FitToLocationsProps) {
+function FitToLocations({ locations, fitSignal }: FitToLocationsProps) {
   const map = useMap();
+  const hasInitialFit = useRef(false);
+  const lastFitSignal = useRef(fitSignal);
 
   useEffect(() => {
     if (locations.length === 0) {
       return;
     }
 
+    const shouldRefit = fitSignal !== lastFitSignal.current;
+    if (shouldRefit) {
+      lastFitSignal.current = fitSignal;
+    }
+
+    if (!shouldRefit && hasInitialFit.current) {
+      return;
+    }
+
     if (locations.length === 1) {
       const onlyTile = locations[0];
       map.setView([onlyTile.latitude, onlyTile.longitude], 19, { animate: false });
+      hasInitialFit.current = true;
       return;
     }
 
@@ -40,7 +54,8 @@ function FitToLocations({ locations }: FitToLocationsProps) {
       maxZoom: 19,
       padding: [28, 28],
     });
-  }, [locations, map]);
+    hasInitialFit.current = true;
+  }, [fitSignal, locations, map]);
 
   return null;
 }
@@ -72,7 +87,16 @@ function createMarkerIcon(color: string, selected = false) {
   });
 }
 
-export function LiveMap({ locations, selectedTileUuid, onTileClick, onMapClick, breadcrumbs, breadcrumbColor, tileColorByUuid }: LiveMapProps) {
+export function LiveMap({
+  locations,
+  selectedTileUuid,
+  onTileClick,
+  onMapClick,
+  breadcrumbs,
+  breadcrumbColor,
+  tileColorByUuid,
+  fitSignal = 0,
+}: LiveMapProps) {
   // Find the selected tile's current position for highlighting
   const selected = selectedTileUuid ? locations.find((t) => t.tile_uuid === selectedTileUuid) : null;
   const markerIcons = useMemo(() => {
@@ -97,7 +121,7 @@ export function LiveMap({ locations, selectedTileUuid, onTileClick, onMapClick, 
   return (
     <section className="map-frame">
       <MapContainer center={DEFAULT_CENTER} zoom={14} className="map-canvas">
-        <FitToLocations locations={locations} />
+        <FitToLocations locations={locations} fitSignal={fitSignal} />
         <MapClickHandler onMapClick={onMapClick} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'

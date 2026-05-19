@@ -11,6 +11,28 @@ const BREADCRUMB_OPTIONS = [10, 25, 50, 100];
 const DEFAULT_ORANGE_AFTER_MINUTES = 60;
 const DEFAULT_RED_AFTER_MINUTES = 360;
 
+function parseAgeThreshold(value: string | undefined, fallback: number): number {
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.max(1, Math.floor(parsed));
+}
+
+const ORANGE_AFTER_MINUTES = parseAgeThreshold(
+  import.meta.env.VITE_TILE_AGE_ORANGE_MINUTES,
+  DEFAULT_ORANGE_AFTER_MINUTES,
+);
+const RED_AFTER_MINUTES = Math.max(
+  ORANGE_AFTER_MINUTES + 1,
+  parseAgeThreshold(import.meta.env.VITE_TILE_AGE_RED_MINUTES, DEFAULT_RED_AFTER_MINUTES),
+);
+
 type AgeBandConfig = {
   orangeAfterMinutes: number;
   redAfterMinutes: number;
@@ -134,15 +156,14 @@ export function App() {
   const { backendConnected, homeAssistantConnected, tileCount } = useSystemStatus(BACKEND_URL);
   const [selectedTileUuid, setSelectedTileUuid] = useState<string | null>(null);
   const [breadcrumbLimit, setBreadcrumbLimit] = useState(10);
-  const [orangeAfterMinutes, setOrangeAfterMinutes] = useState(DEFAULT_ORANGE_AFTER_MINUTES);
-  const [redAfterMinutes, setRedAfterMinutes] = useState(DEFAULT_RED_AFTER_MINUTES);
+  const [mapResetSignal, setMapResetSignal] = useState(0);
   const [currentTimeMs, setCurrentTimeMs] = useState(() => Date.now());
   const selectedTile = locations.find((item) => item.tile_uuid === selectedTileUuid) ?? null;
   const { history, loading } = useTileHistory(BACKEND_URL, selectedTileUuid);
   const displayedHistory = history.slice(-breadcrumbLimit).reverse();
   const ageBandConfig: AgeBandConfig = {
-    orangeAfterMinutes,
-    redAfterMinutes,
+    orangeAfterMinutes: ORANGE_AFTER_MINUTES,
+    redAfterMinutes: RED_AFTER_MINUTES,
   };
   const sortedTiles: TileListEntry[] = [...locations]
     .map((tile) => {
@@ -194,19 +215,8 @@ export function App() {
     setSelectedTileUuid(null);
   };
 
-  const handleOrangeAfterMinutesChange = (value: number) => {
-    const safeOrange = Number.isFinite(value) ? Math.max(1, value) : DEFAULT_ORANGE_AFTER_MINUTES;
-    setOrangeAfterMinutes(safeOrange);
-    if (redAfterMinutes <= safeOrange) {
-      setRedAfterMinutes(safeOrange + 1);
-    }
-  };
-
-  const handleRedAfterMinutesChange = (value: number) => {
-    const safeRed = Number.isFinite(value)
-      ? Math.max(orangeAfterMinutes + 1, value)
-      : Math.max(orangeAfterMinutes + 1, DEFAULT_RED_AFTER_MINUTES);
-    setRedAfterMinutes(safeRed);
+  const handleResetView = () => {
+    setMapResetSignal((value) => value + 1);
   };
 
   return (
@@ -227,40 +237,26 @@ export function App() {
         </p>
       </header>
 
-      <LiveMap
-        locations={locations}
-        selectedTileUuid={selectedTileUuid}
-        onTileClick={handleTileClick}
-        onMapClick={handleMapClick}
-        breadcrumbs={displayedHistory}
-        breadcrumbColor={breadcrumbColor}
-        tileColorByUuid={tileColorByUuid}
-      />
+      <section className="map-panel">
+        <div className="map-toolbar">
+          <button type="button" className="map-reset-button" onClick={handleResetView} disabled={locations.length === 0}>
+            Reset View
+          </button>
+        </div>
+        <LiveMap
+          locations={locations}
+          selectedTileUuid={selectedTileUuid}
+          onTileClick={handleTileClick}
+          onMapClick={handleMapClick}
+          breadcrumbs={displayedHistory}
+          breadcrumbColor={breadcrumbColor}
+          tileColorByUuid={tileColorByUuid}
+          fitSignal={mapResetSignal}
+        />
+      </section>
 
       <details className="tile-list-panel" open>
         <summary>Tracked Tiles</summary>
-        <div className="tile-list-config">
-          <label htmlFor="orange-after-minutes">
-            Orange after (minutes)
-            <input
-              id="orange-after-minutes"
-              type="number"
-              min={1}
-              value={orangeAfterMinutes}
-              onChange={(event) => handleOrangeAfterMinutesChange(Number(event.target.value))}
-            />
-          </label>
-          <label htmlFor="red-after-minutes">
-            Red after (minutes)
-            <input
-              id="red-after-minutes"
-              type="number"
-              min={orangeAfterMinutes + 1}
-              value={redAfterMinutes}
-              onChange={(event) => handleRedAfterMinutesChange(Number(event.target.value))}
-            />
-          </label>
-        </div>
         {sortedTiles.length === 0 ? (
           <p className="tile-list-empty">No tile positions received yet.</p>
         ) : (
