@@ -12,7 +12,7 @@ export function Breadcrumbs({ points, color = "#0f766e" }: BreadcrumbsProps) {
   return (
     <>
       <Polyline positions={polylinePositions} pathOptions={{ color, weight: 3, opacity: 0.5 }} />
-      {points.map((point, idx) => (
+      {points.map((point) => (
         <CircleMarker
           key={`${point.tile_uuid}-${point.observed_at}`}
           center={[point.latitude, point.longitude]}

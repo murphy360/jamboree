@@ -10,6 +10,9 @@
     "lint": "eslint . --ext ts,tsx --max-warnings 0"
   },
   "dependencies": {
+    "@types/esri-leaflet": "^3.0.4",
+    "esri-leaflet": "^3.0.12",
+    "esri-leaflet-vector": "^4.2.1",
     "leaflet": "^1.9.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

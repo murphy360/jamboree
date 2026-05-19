@@ -5,6 +5,9 @@ import importPlugin from "eslint-plugin-import";
 import tseslint from "typescript-eslint";
 
 export default [
+  {
+    ignores: ["dist/**", "node_modules/**", "build/**"],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
