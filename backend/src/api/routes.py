@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 
 from src.core.settings import HealthResponse, TileStatusResponse, get_settings
+from src.services.models import TileHistoryResponse
 
 router = APIRouter()
 
@@ -23,3 +24,13 @@ async def tile_status(request: Request) -> TileStatusResponse:
             tile_count=0,
             detail=f"Tile API error: {str(exc)[:280]}",
         )
+
+
+@router.get("/tiles/{tile_uuid}/history", response_model=TileHistoryResponse)
+async def tile_history(tile_uuid: str, request: Request) -> TileHistoryResponse:
+    history_store = request.app.state.history_store
+    history = history_store.get_history(tile_uuid)
+    if not history:
+        raise HTTPException(status_code=404, detail="Tile history not found")
+
+    return TileHistoryResponse(tile_uuid=tile_uuid, label=history[-1].label, items=history)

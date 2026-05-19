@@ -14,3 +14,9 @@ class TileLocation(BaseModel):
     longitude: float
     observed_at: datetime
     label: str
+
+
+class TileHistoryResponse(BaseModel):
+    tile_uuid: str
+    label: str
+    items: list[TileLocation]
