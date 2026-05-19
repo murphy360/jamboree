@@ -8,6 +8,7 @@ services:
       - "${BACKEND_HOST_PORT:-18000}:8000"
     volumes:
       - ./backend/src:/app/src
+      - ./backend/data:/app/data
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 20s
@@ -17,8 +18,6 @@ services:
   frontend:
     build:
       context: ./frontend
-    environment:
-      - VITE_WS_URL=${FRONTEND_WS_URL:-ws://localhost:18000/ws/locations}
     ports:
       - "5173:5173"
     volumes:

@@ -25,6 +25,8 @@ Set these values in `backend/.env`:
 - `HOME_ASSISTANT_TILE_ENTITIES` (optional comma-separated filter, e.g. `device_tracker.tile_keys,device_tracker.tile_daypack`)
 - `HOME_ASSISTANT_EXCLUDE_ENTITIES` (optional comma-separated entity IDs to ignore, e.g. `device_tracker.corey_s_s25_ultra`)
 - `HOME_ASSISTANT_REQUIRE_HASH` (`true` by default; only includes trackers with `#` in name/identifier fields)
+- `TILE_HISTORY_DB_PATH` (`/app/data/tile_history.db` by default; persisted to `backend/data` via Docker volume)
+- `TILE_HISTORY_MAX_POINTS_PER_TILE` (`100` by default)
 
 If `HOME_ASSISTANT_TILE_ENTITIES` is empty, backend auto-discovers Tile trackers by scanning `device_tracker.*` entities that include `tile` in entity id or friendly name.
 

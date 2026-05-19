@@ -18,7 +18,10 @@ class Settings(BaseSettings):
     home_assistant_tile_entities: str = ""
     home_assistant_exclude_entities: str = ""
     home_assistant_require_hash: bool = True
+    home_assistant_tile_timestamp_offset_minutes: int = Field(default=0, ge=-720, le=720)
     tile_poll_interval_seconds: int = Field(default=15, ge=5, le=300)
+    tile_history_db_path: str = "/app/data/tile_history.db"
+    tile_history_max_points_per_tile: int = Field(default=500, ge=10, le=20000)
     backend_cors_origins: str = "http://localhost:5173"
 
 

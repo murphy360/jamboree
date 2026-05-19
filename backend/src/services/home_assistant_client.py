@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+import re
 from typing import Any
 
 import httpx
@@ -9,6 +10,18 @@ from src.services.models import TileLocation, TileSummary
 
 
 class HomeAssistantTileClient:
+    _FUTURE_SKEW_TOLERANCE_SECONDS = 90
+    _TILE_TIMESTAMP_KEYS = (
+        "last_seen",
+        "last_update",
+        "last_updated",
+        "timestamp",
+        "last_timestamp",
+        "location_updated_at",
+        "tile_updated_at",
+        "last_location_update",
+    )
+
     def __init__(
         self,
         base_url: str,
@@ -16,13 +29,22 @@ class HomeAssistantTileClient:
         tile_entities: str = "",
         exclude_entities: str = "",
         require_hash: bool = True,
+        timestamp_offset_minutes: int = 0,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.entity_filter = [item.strip() for item in tile_entities.split(",") if item.strip()]
         self.entity_exclude = {item.strip() for item in exclude_entities.split(",") if item.strip()}
         self.require_hash = require_hash
+        self.timestamp_offset_minutes = timestamp_offset_minutes
         self._state_cache: dict[str, dict[str, Any]] = {}
+
+    def _apply_timestamp_offset(self, timestamp: datetime | None) -> datetime | None:
+        if not timestamp:
+            return None
+        if not self.timestamp_offset_minutes:
+            return timestamp
+        return timestamp + timedelta(minutes=self.timestamp_offset_minutes)
 
     def _headers(self) -> dict[str, str]:
         if not self.token:
@@ -127,6 +149,158 @@ class HomeAssistantTileClient:
         return TileSummary(uuid=entity_id, name=name)
 
     @staticmethod
+    def _parse_datetime(value: Any) -> datetime | None:
+        if isinstance(value, datetime):
+            if value.tzinfo is None:
+                return value.replace(tzinfo=UTC)
+            return value
+
+        if isinstance(value, (int, float)):
+            ts = float(value)
+            if ts > 10_000_000_000:
+                ts = ts / 1000
+            try:
+                return datetime.fromtimestamp(ts, tz=UTC)
+            except (OverflowError, OSError, ValueError):
+                return None
+
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return None
+
+            if raw.replace(".", "", 1).isdigit():
+                return HomeAssistantTileClient._parse_datetime(float(raw))
+
+            try:
+                parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            except ValueError:
+                return None
+
+            if parsed.tzinfo is None:
+                return parsed.replace(tzinfo=UTC)
+            return parsed
+
+        return None
+
+    @staticmethod
+    def _parse_naive_iso_as_utc(raw: str) -> datetime | None:
+        text = raw.strip()
+        if not text:
+            return None
+
+        # Retry parsing by stripping any trailing timezone suffix.
+        # Some upstream integrations appear to emit local wall time with an offset label,
+        # which can push timestamps several hours into the future when interpreted strictly.
+        no_offset = re.sub(r"(Z|[+-]\d{2}:\d{2})$", "", text)
+        no_offset = no_offset.strip()
+        if not no_offset:
+            return None
+
+        try:
+            parsed = datetime.fromisoformat(no_offset)
+        except ValueError:
+            return None
+
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC)
+
+    @staticmethod
+    def _coerce_plausible_tile_timestamp(parsed: datetime | None, raw_value: Any) -> tuple[datetime | None, bool]:
+        if not parsed:
+            return None, False
+
+        now_utc = datetime.now(UTC)
+        if parsed <= now_utc:
+            return parsed, False
+
+        if (parsed - now_utc).total_seconds() <= HomeAssistantTileClient._FUTURE_SKEW_TOLERANCE_SECONDS:
+            return parsed, False
+
+        if isinstance(raw_value, str):
+            corrected = HomeAssistantTileClient._parse_naive_iso_as_utc(raw_value)
+            if corrected and corrected <= now_utc:
+                return corrected, True
+
+        return None, False
+
+    @staticmethod
+    def _is_tile_timestamp_key(key: str) -> bool:
+        key_normalized = key.strip().lower()
+        if not key_normalized:
+            return False
+
+        excluded_tokens = ("lost", "ring", "voip")
+        if any(token in key_normalized for token in excluded_tokens):
+            return False
+
+        has_last = "last" in key_normalized
+        has_tile_signal = any(
+            token in key_normalized
+            for token in ("seen", "update", "location", "locate", "timestamp", "position")
+        )
+        return has_last and has_tile_signal
+
+    def _extract_tile_service_timestamp_with_source(self, attrs: dict[str, Any]) -> tuple[datetime | None, str | None]:
+        for key in HomeAssistantTileClient._TILE_TIMESTAMP_KEYS:
+            raw_value = attrs.get(key)
+            parsed = HomeAssistantTileClient._parse_datetime(raw_value)
+            parsed = self._apply_timestamp_offset(parsed)
+            parsed, corrected = HomeAssistantTileClient._coerce_plausible_tile_timestamp(parsed, raw_value)
+            if parsed:
+                source_key = f"{key} (timezone-corrected)" if corrected else key
+                return parsed, source_key
+
+        for key, value in attrs.items():
+            key_str = str(key)
+            if not HomeAssistantTileClient._is_tile_timestamp_key(key_str):
+                continue
+
+            parsed = HomeAssistantTileClient._parse_datetime(value)
+            parsed = self._apply_timestamp_offset(parsed)
+            parsed, corrected = HomeAssistantTileClient._coerce_plausible_tile_timestamp(parsed, value)
+            if parsed:
+                source_key = f"{key_str} (timezone-corrected)" if corrected else key_str
+                return parsed, source_key
+
+        return None, None
+
+    def _extract_tile_service_timestamp(self, attrs: dict[str, Any]) -> datetime | None:
+        timestamp, _ = self._extract_tile_service_timestamp_with_source(attrs)
+        return timestamp
+
+    def _build_timestamp_candidates(self, attrs: dict[str, Any]) -> list[dict[str, str | bool | int]]:
+        now_utc = datetime.now(UTC)
+        candidates: list[dict[str, str | bool | int]] = []
+        for key, value in attrs.items():
+            key_str = str(key)
+            if not (
+                key_str in HomeAssistantTileClient._TILE_TIMESTAMP_KEYS
+                or HomeAssistantTileClient._is_tile_timestamp_key(key_str)
+            ):
+                continue
+
+            parsed = HomeAssistantTileClient._parse_datetime(value)
+            if not parsed:
+                continue
+
+            parsed_utc = parsed.astimezone(UTC)
+            adjusted_utc = self._apply_timestamp_offset(parsed_utc) or parsed_utc
+            candidates.append(
+                {
+                    "field": key_str,
+                    "raw": str(value),
+                    "parsed_utc": parsed_utc.isoformat(),
+                    "adjusted_utc": adjusted_utc.isoformat(),
+                    "offset_minutes": self.timestamp_offset_minutes,
+                    "is_tile_timestamp_candidate": HomeAssistantTileClient._is_tile_timestamp_key(key_str),
+                    "is_future_vs_now": adjusted_utc > now_utc,
+                }
+            )
+        return candidates
+
+    @staticmethod
     def _to_location(state: dict[str, Any], label: str) -> TileLocation | None:
         attrs = state.get("attributes") or {}
         latitude = attrs.get("latitude")
@@ -134,12 +308,11 @@ class HomeAssistantTileClient:
         if latitude is None or longitude is None:
             return None
 
+        tile_service_observed_at = self._extract_tile_service_timestamp(attrs)
         updated = state.get("last_updated") or state.get("last_changed")
-        observed_at = (
-            datetime.fromisoformat(str(updated).replace("Z", "+00:00"))
-            if updated
-            else datetime.now(UTC)
-        )
+        state_updated_at = HomeAssistantTileClient._parse_datetime(updated)
+        observed_at = tile_service_observed_at or state_updated_at or datetime.now(UTC)
+        polled_at = datetime.now(UTC)
 
         return TileLocation(
             tile_uuid=str(state.get("entity_id")),
@@ -147,6 +320,8 @@ class HomeAssistantTileClient:
             longitude=float(longitude),
             observed_at=observed_at,
             label=label,
+            tile_service_observed_at=tile_service_observed_at,
+            polled_at=polled_at,
         )
 
     async def list_tiles(self) -> list[TileSummary]:
@@ -182,6 +357,60 @@ class HomeAssistantTileClient:
             if summary:
                 summaries.append(summary)
         return summaries
+
+    async def debug_tile_timestamps(self) -> list[dict[str, Any]]:
+        states: list[dict[str, Any]] = []
+
+        if self.entity_filter:
+            for entity_id in self.entity_filter:
+                state = await self._fetch_state(entity_id)
+                if state:
+                    states.append(state)
+        else:
+            states = await self._fetch_states()
+            states = [item for item in states if self._is_tile_tracker(item)]
+
+        states = [
+            item
+            for item in states
+            if str(item.get("entity_id") or "") not in self.entity_exclude
+        ]
+
+        if self.require_hash:
+            states = [item for item in states if self._contains_hash(item)]
+
+        now_utc = datetime.now(UTC)
+        details: list[dict[str, Any]] = []
+
+        for state in states:
+            entity_id = str(state.get("entity_id") or "")
+            attrs = state.get("attributes") or {}
+            label = self._best_label(entity_id, attrs)
+            tile_ts, tile_ts_field = self._extract_tile_service_timestamp_with_source(attrs)
+            state_last_updated = self._parse_datetime(state.get("last_updated"))
+            state_last_changed = self._parse_datetime(state.get("last_changed"))
+
+            details.append(
+                {
+                    "tile_uuid": entity_id,
+                    "label": label,
+                    "selected_tile_timestamp_field": tile_ts_field,
+                    "selected_tile_timestamp_utc": tile_ts.astimezone(UTC).isoformat() if tile_ts else None,
+                    "selected_tile_timestamp_is_future": tile_ts.astimezone(UTC) > now_utc if tile_ts else False,
+                    "tile_timestamp_offset_minutes": self.timestamp_offset_minutes,
+                    "state_last_updated_utc": state_last_updated.astimezone(UTC).isoformat()
+                    if state_last_updated
+                    else None,
+                    "state_last_changed_utc": state_last_changed.astimezone(UTC).isoformat()
+                    if state_last_changed
+                    else None,
+                    "timestamp_candidates": self._build_timestamp_candidates(attrs),
+                    "attributes": attrs,
+                    "state_raw": state,
+                }
+            )
+
+        return details
 
     async def get_tile_location(self, tile_uuid: str, label: str) -> TileLocation | None:
         state = self._state_cache.get(tile_uuid)

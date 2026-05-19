@@ -26,6 +26,14 @@ frontend/.env.*
 dist/
 build/
 
+# Local backend history database
+backend/data/*.db
+backend/data/*.db-*
+
+# Backend persisted runtime data
+backend/data/*
+!backend/data/.gitkeep
+
 # OS
 .DS_Store
 Thumbs.db

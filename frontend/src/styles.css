@@ -2,6 +2,8 @@
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   color: #0f172a;
   background: linear-gradient(180deg, #ecfeff 0%, #f8fafc 100%);
+  --breadcrumb-history: #f59e42;
+  --breadcrumb-live: #0f766e;
 }
 
 * {
@@ -105,6 +107,13 @@ body {
   gap: 1rem;
 }
 
+.tile-history-toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.6rem;
+}
+
 .tile-history-kicker {
   margin: 0;
   text-transform: uppercase;
@@ -121,6 +130,30 @@ body {
 
 .tile-history-meta {
   margin: 0;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.tile-history-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: #334155;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.tile-history-selector select {
+  border: 1px solid #cbd5e1;
+  border-radius: 0.55rem;
+  background: #f8fafc;
+  color: #0f172a;
+  padding: 0.4rem 0.55rem;
+  font: inherit;
+}
+
+.tile-history-count {
+  margin: 0.85rem 0 0;
   color: #475569;
   font-size: 0.9rem;
 }
@@ -161,8 +194,43 @@ body {
   height: 100%;
 }
 
+.tile-marker-shell {
+  background: transparent;
+  border: none;
+}
+
+.tile-marker-dot {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #0f766e;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 6px rgba(15, 118, 110, 0.35);
+}
+
+.tile-marker-shell-selected .tile-marker-dot,
+.tile-marker-dot-selected {
+  width: 13px;
+  height: 13px;
+  background: #115e59;
+  border-color: #ecfeff;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.2), 0 3px 10px rgba(15, 118, 110, 0.45);
+}
+
 @media (min-width: 900px) {
   .tile-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .tile-history-header {
+    flex-direction: column;
+  }
+
+  .tile-history-toolbar {
+    width: 100%;
+    align-items: flex-start;
   }
 }

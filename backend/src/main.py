@@ -10,12 +10,18 @@ from src.services.history_store import TileHistoryStore
 from src.services.poller import TilePoller
 from src.services.ws_manager import WebSocketManager
 
+PRIVATE_NETWORK_ORIGIN_REGEX = (
+    r"^https?://(localhost|127\.0\.0\.1|10(?:\.\d{1,3}){3}|"
+    r"192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(:\d+)?$"
+)
+
 settings = get_settings()
 app = FastAPI(title=settings.app_name)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in settings.backend_cors_origins.split(",") if origin.strip()],
+    allow_origin_regex=PRIVATE_NETWORK_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -23,13 +29,17 @@ app.add_middleware(
 
 app.include_router(router)
 ws_manager = WebSocketManager()
-history_store = TileHistoryStore()
+history_store = TileHistoryStore(
+    db_path=settings.tile_history_db_path,
+    max_points_per_tile=settings.tile_history_max_points_per_tile,
+)
 tile_client = HomeAssistantTileClient(
     base_url=settings.home_assistant_url,
     token=settings.home_assistant_token,
     tile_entities=settings.home_assistant_tile_entities,
     exclude_entities=settings.home_assistant_exclude_entities,
     require_hash=settings.home_assistant_require_hash,
+    timestamp_offset_minutes=settings.home_assistant_tile_timestamp_offset_minutes,
 )
 app.state.tile_client = tile_client
 app.state.history_store = history_store
@@ -48,6 +58,7 @@ async def shutdown() -> None:
     if poller_task:
         await poller.stop()
         poller_task.cancel()
+    history_store.close()
 
 
 @app.websocket("/ws/locations")
