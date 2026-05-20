@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     tile_history_max_points_per_tile: int = Field(default=0, ge=0, le=20000)
     tile_dwell_merge_radius_meters: int = Field(default=50, ge=5, le=500)
     tile_area_hotspot_buffer_meters: int = Field(default=50, ge=0, le=500)
-    backend_cors_origins: str = "http://localhost:5173"
+    backend_cors_origins: str = "*"
 
 
 class HealthResponse(BaseModel):

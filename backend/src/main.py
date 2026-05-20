@@ -11,18 +11,15 @@ from src.services.history_store import TileHistoryStore
 from src.services.poller import TilePoller
 from src.services.ws_manager import WebSocketManager
 
-PRIVATE_NETWORK_ORIGIN_REGEX = (
-    r"^https?://(localhost|127\.0\.0\.1|10(?:\.\d{1,3}){3}|"
-    r"192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(:\d+)?$"
-)
-
 settings = get_settings()
 app = FastAPI(title=settings.app_name)
 
+# Parse CORS origins - supports both "*" and comma-separated list
+cors_origins = [origin.strip() for origin in settings.backend_cors_origins.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin.strip() for origin in settings.backend_cors_origins.split(",") if origin.strip()],
-    allow_origin_regex=PRIVATE_NETWORK_ORIGIN_REGEX,
+    allow_origins=cors_origins if "*" not in cors_origins else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
