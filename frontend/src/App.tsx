@@ -5,8 +5,8 @@ import { useTileLocations, type TileLocation } from "./hooks/useTileLocations";
 import { LiveMap } from "./components/LiveMap";
 
 const _host = typeof window !== "undefined" ? window.location.hostname : "localhost";
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? `http://${_host}:18000`;
-const WS_URL = import.meta.env.VITE_WS_URL ?? `ws://${_host}:18000/ws/locations`;
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? `http://${_host}:8086`;
+const WS_URL = import.meta.env.VITE_WS_URL ?? `ws://${_host}:8086/ws/locations`;
 const BREADCRUMB_OPTIONS = [10, 25, 50, 100];
 const DEFAULT_ORANGE_AFTER_MINUTES = 60;
 const DEFAULT_RED_AFTER_MINUTES = 360;

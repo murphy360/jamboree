@@ -5,7 +5,7 @@ services:
     env_file:
       - ./backend/.env
     ports:
-      - "${BACKEND_HOST_PORT:-18000}:8000"
+      - "8086:8000"
     volumes:
       - ./backend/src:/app/src
       - ./backend/data:/app/data
