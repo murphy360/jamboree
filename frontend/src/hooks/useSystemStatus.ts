@@ -24,7 +24,6 @@ export function useSystemStatus(baseUrl: string) {
     }
 
     let cancelled = false;
-    let timerId: number | undefined;
 
     const refresh = async () => {
       try {
@@ -53,7 +52,7 @@ export function useSystemStatus(baseUrl: string) {
     };
 
     void refresh();
-    timerId = window.setInterval(refresh, 10000);
+    const timerId = window.setInterval(refresh, 10000);
 
     return () => {
       cancelled = true;

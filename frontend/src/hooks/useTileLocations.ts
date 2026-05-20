@@ -15,6 +15,120 @@ type LocationMessage = {
   items: TileLocation[];
 };
 
+type TileSocketCallbacks = {
+  onConnected: (connected: boolean) => void;
+  onItems: (items: TileLocation[]) => void;
+};
+
+type TileSocketSession = {
+  dispose: () => void;
+};
+
+function parseLocationMessage(payload: string): TileLocation[] | null {
+  try {
+    const parsed = JSON.parse(payload) as LocationMessage;
+    if (parsed.type === "tile_locations" && Array.isArray(parsed.items)) {
+      return parsed.items;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function createTileSocketSession(url: string, callbacks: TileSocketCallbacks): TileSocketSession {
+  let isDisposed = false;
+  let socket: WebSocket | null = null;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const connect = () => {
+    const ws = new WebSocket(url);
+    socket = ws;
+    ws.addEventListener("open", () => handleOpen(ws, callbacks, () => isDisposed));
+    ws.addEventListener("close", () => handleClose(connect, callbacks, () => isDisposed, reconnectTimer, (value) => {
+      reconnectTimer = value;
+    }));
+    ws.addEventListener("message", (event) => handleMessage(event.data, callbacks));
+  };
+
+  connect();
+
+  return {
+    dispose: () => {
+      isDisposed = true;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+      }
+      safelyCloseSocket(socket);
+    },
+  };
+}
+
+function handleOpen(ws: WebSocket, callbacks: TileSocketCallbacks, isDisposed: () => boolean) {
+  if (isDisposed()) {
+    ws.close();
+    return;
+  }
+
+  callbacks.onConnected(true);
+  ws.send("hello");
+}
+
+function handleClose(
+  reconnect: () => void,
+  callbacks: TileSocketCallbacks,
+  isDisposed: () => boolean,
+  reconnectTimer: ReturnType<typeof setTimeout> | null,
+  setReconnectTimer: (value: ReturnType<typeof setTimeout> | null) => void,
+) {
+  if (isDisposed()) {
+    return;
+  }
+
+  callbacks.onConnected(false);
+  if (reconnectTimer) {
+    return;
+  }
+
+  const timer = setTimeout(() => {
+    setReconnectTimer(null);
+    if (!isDisposed()) {
+      reconnect();
+    }
+  }, 1500);
+  setReconnectTimer(timer);
+}
+
+function handleMessage(payload: string, callbacks: TileSocketCallbacks) {
+  const items = parseLocationMessage(payload);
+  if (items) {
+    callbacks.onItems(items);
+  }
+}
+
+function safelyCloseSocket(socket: WebSocket | null) {
+  if (!socket) {
+    return;
+  }
+
+  const activeSocket = socket;
+  if (activeSocket.readyState === WebSocket.CONNECTING) {
+    activeSocket.addEventListener(
+      "open",
+      () => {
+        activeSocket.close();
+      },
+      { once: true },
+    );
+    return;
+  }
+
+  if (activeSocket.readyState === WebSocket.OPEN) {
+    activeSocket.close();
+  }
+}
+
 export function useTileLocations(url: string) {
   const [locations, setLocations] = useState<TileLocation[]>([]);
   const [connected, setConnected] = useState(false);
@@ -22,91 +136,17 @@ export function useTileLocations(url: string) {
   const normalizedUrl = useMemo(() => url.trim(), [url]);
 
   useEffect(() => {
-    if (!normalizedUrl) return;
-    let isDisposed = false;
-    let socket: WebSocket | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    if (!normalizedUrl) {
+      return;
+    }
 
-    const scheduleReconnect = () => {
-      if (isDisposed || reconnectTimer) {
-        return;
-      }
-
-      reconnectTimer = setTimeout(() => {
-        reconnectTimer = null;
-        if (!isDisposed) {
-          connect();
-        }
-      }, 1500);
-    };
-
-    const connect = () => {
-      const ws = new WebSocket(normalizedUrl);
-      socket = ws;
-
-      ws.addEventListener("open", () => {
-        if (isDisposed) {
-          ws.close();
-          return;
-        }
-        setConnected(true);
-        ws.send("hello");
-      });
-
-      ws.addEventListener("close", () => {
-        if (isDisposed) {
-          return;
-        }
-        setConnected(false);
-        scheduleReconnect();
-      });
-
-      ws.addEventListener("message", (event) => {
-        if (isDisposed) {
-          return;
-        }
-        try {
-          const parsed = JSON.parse(event.data) as LocationMessage;
-          if (parsed.type === "tile_locations" && Array.isArray(parsed.items)) {
-            setLocations(parsed.items);
-          }
-        } catch {
-          // Ignore malformed messages; backend API is unofficial.
-        }
-      });
-    };
-
-    connect();
+    const session = createTileSocketSession(normalizedUrl, {
+      onConnected: setConnected,
+      onItems: setLocations,
+    });
 
     return () => {
-      isDisposed = true;
-
-      if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-      }
-
-      if (!socket) {
-        return;
-      }
-
-      const activeSocket = socket;
-
-      if (activeSocket.readyState === WebSocket.CONNECTING) {
-        // In React StrictMode, effects mount/unmount twice in dev. Delay close
-        // until the connection opens to avoid noisy "closed before established" logs.
-        activeSocket.addEventListener(
-          "open",
-          () => {
-            activeSocket.close();
-          },
-          { once: true },
-        );
-        return;
-      }
-
-      if (activeSocket.readyState === WebSocket.OPEN) {
-        activeSocket.close();
-      }
+      session.dispose();
     };
   }, [normalizedUrl]);
 

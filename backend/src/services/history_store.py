@@ -1,10 +1,21 @@
 from __future__ import annotations
 
 import sqlite3
+from collections import defaultdict
+from math import asin, cos, radians, sin, sqrt
 from pathlib import Path
 from threading import Lock
 
-from src.services.models import TileLocation
+from src.services.models import TileDailySummary, TileDwellCluster, TileLocation
+
+
+def _haversine_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    earth_radius_m = 6_371_000.0
+    d_lat = radians(lat2 - lat1)
+    d_lon = radians(lon2 - lon1)
+    a = sin(d_lat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(d_lon / 2) ** 2
+    c = 2 * asin(sqrt(a))
+    return earth_radius_m * c
 
 
 class TileHistoryStore:
@@ -156,21 +167,22 @@ class TileHistoryStore:
                 ),
             )
 
-        for tile_uuid in touched_tiles:
-            self._connection.execute(
-                """
-                DELETE FROM tile_history
-                WHERE tile_uuid = ?
-                  AND rowid NOT IN (
-                      SELECT rowid
-                      FROM tile_history
-                      WHERE tile_uuid = ?
-                      ORDER BY observed_at DESC
-                      LIMIT ?
-                  )
-                """,
-                (tile_uuid, tile_uuid, self._max_points_per_tile),
-            )
+        if self._max_points_per_tile > 0:
+            for tile_uuid in touched_tiles:
+                self._connection.execute(
+                    """
+                    DELETE FROM tile_history
+                    WHERE tile_uuid = ?
+                      AND rowid NOT IN (
+                          SELECT rowid
+                          FROM tile_history
+                          WHERE tile_uuid = ?
+                          ORDER BY observed_at DESC
+                          LIMIT ?
+                      )
+                    """,
+                    (tile_uuid, tile_uuid, self._max_points_per_tile),
+                )
 
         if touched_tiles:
             self._connection.commit()
@@ -228,6 +240,109 @@ class TileHistoryStore:
                 """
             ).fetchall()
         return [TileLocation.model_validate(dict(row)) for row in rows]
+
+    def build_daily_breakdown(self, history: list[TileLocation]) -> list[TileDailySummary]:
+        grouped: dict[str, list[TileLocation]] = defaultdict(list)
+
+        for point in history:
+            grouped[point.observed_at.date().isoformat()].append(point)
+
+        summaries: list[TileDailySummary] = []
+        for date in sorted(grouped.keys()):
+            points = grouped[date]
+            start = points[0].observed_at
+            end = points[-1].observed_at
+            span_minutes = int(max(0, (end - start).total_seconds()) // 60)
+            summaries.append(
+                TileDailySummary(
+                    date=date,
+                    point_count=len(points),
+                    start_observed_at=start,
+                    end_observed_at=end,
+                    total_span_minutes=span_minutes,
+                )
+            )
+
+        return summaries
+
+    def build_dwell_clusters(
+        self,
+        history: list[TileLocation],
+        max_gap_minutes: int = 30,
+        merge_radius_meters: float = 50.0,
+    ) -> list[TileDwellCluster]:
+        if not history:
+            return []
+
+        per_cluster: list[dict[str, float | int]] = []
+        max_gap_seconds = max_gap_minutes * 60
+
+        for index, point in enumerate(history):
+            record = self._find_cluster(per_cluster, point.latitude, point.longitude, merge_radius_meters)
+            if record is None:
+                record = {
+                    "latitude_sum": 0.0,
+                    "longitude_sum": 0.0,
+                    "samples": 0,
+                    "seconds_spent": 0,
+                }
+                per_cluster.append(record)
+
+            record["latitude_sum"] = float(record["latitude_sum"]) + point.latitude
+            record["longitude_sum"] = float(record["longitude_sum"]) + point.longitude
+            record["samples"] = int(record["samples"]) + 1
+
+            if index == len(history) - 1:
+                continue
+
+            next_point = history[index + 1]
+            gap_seconds = int((next_point.observed_at - point.observed_at).total_seconds())
+            bounded_gap = min(max(gap_seconds, 0), max_gap_seconds)
+            record["seconds_spent"] = int(record["seconds_spent"]) + bounded_gap
+
+        clusters: list[TileDwellCluster] = []
+        for record in per_cluster:
+            samples = int(record["samples"])
+            if samples <= 0:
+                continue
+
+            seconds_spent = int(record["seconds_spent"])
+            minutes_spent = int(seconds_spent // 60)
+            clusters.append(
+                TileDwellCluster(
+                    latitude=float(record["latitude_sum"]) / samples,
+                    longitude=float(record["longitude_sum"]) / samples,
+                    samples=samples,
+                    minutes_spent=minutes_spent,
+                )
+            )
+
+        clusters.sort(key=lambda item: (item.minutes_spent, item.samples), reverse=True)
+        return clusters
+
+    def _find_cluster(
+        self,
+        clusters: list[dict[str, float | int]],
+        latitude: float,
+        longitude: float,
+        merge_radius_meters: float,
+    ) -> dict[str, float | int] | None:
+        best_cluster: dict[str, float | int] | None = None
+        best_distance = float("inf")
+
+        for cluster in clusters:
+            samples = int(cluster["samples"])
+            if samples <= 0:
+                continue
+
+            center_lat = float(cluster["latitude_sum"]) / samples
+            center_lon = float(cluster["longitude_sum"]) / samples
+            distance = _haversine_meters(latitude, longitude, center_lat, center_lon)
+            if distance <= merge_radius_meters and distance < best_distance:
+                best_cluster = cluster
+                best_distance = distance
+
+        return best_cluster
 
     def close(self) -> None:
         with self._lock:

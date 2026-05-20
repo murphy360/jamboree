@@ -26,7 +26,11 @@ Set these values in `backend/.env`:
 - `HOME_ASSISTANT_EXCLUDE_ENTITIES` (optional comma-separated entity IDs to ignore, e.g. `device_tracker.corey_s_s25_ultra`)
 - `HOME_ASSISTANT_REQUIRE_HASH` (`true` by default; only includes trackers with `#` in name/identifier fields)
 - `TILE_HISTORY_DB_PATH` (`/app/data/tile_history.db` by default; persisted to `backend/data` via Docker volume)
-- `TILE_HISTORY_MAX_POINTS_PER_TILE` (`100` by default)
+- `TILE_HISTORY_MAX_POINTS_PER_TILE` (`0` by default for unlimited retention; set a positive value to cap stored points per tile)
+- `TILE_DWELL_MERGE_RADIUS_METERS` (`50` by default; merges nearby dwell hotspots into one cluster)
+
+Tile details endpoint supports runtime override for hotspot merge distance:
+- `GET /tiles/{tile_uuid}/details?dwell_merge_meters=50`
 
 If `HOME_ASSISTANT_TILE_ENTITIES` is empty, backend auto-discovers Tile trackers by scanning `device_tracker.*` entities that include `tile` in entity id or friendly name.
 

@@ -74,6 +74,50 @@ function MapClickHandler({ onMapClick }: MapClickHandlerProps) {
   return null;
 }
 
+type SelectedTileHighlightProps = {
+  selected: TileLocation | null;
+  color: string;
+};
+
+function SelectedTileHighlight({ selected, color }: SelectedTileHighlightProps) {
+  if (!selected) {
+    return null;
+  }
+
+  return (
+    <CircleMarker
+      center={[selected.latitude, selected.longitude]}
+      radius={14}
+      pathOptions={{ color, weight: 2.5, fillOpacity: 0, opacity: 0.55, dashArray: "2 6" }}
+      interactive={false}
+    />
+  );
+}
+
+function findSelectedTile(locations: TileLocation[], selectedTileUuid: string | null): TileLocation | null {
+  if (!selectedTileUuid) {
+    return null;
+  }
+
+  return locations.find((item) => item.tile_uuid === selectedTileUuid) ?? null;
+}
+
+function getSelectedMarkerColor(selected: TileLocation | null, tileColorByUuid?: Record<string, string>): string {
+  if (!selected || !tileColorByUuid) {
+    return "#2563eb";
+  }
+
+  return tileColorByUuid[selected.tile_uuid] ?? "#2563eb";
+}
+
+function BreadcrumbOverlay({ breadcrumbs, color }: { breadcrumbs?: TileLocation[]; color?: string }) {
+  if (!breadcrumbs || breadcrumbs.length <= 1) {
+    return null;
+  }
+
+  return <Breadcrumbs points={breadcrumbs} color={color || "#0f766e"} />;
+}
+
 export function LiveMap({
   locations,
   selectedTileUuid,
@@ -84,9 +128,8 @@ export function LiveMap({
   tileColorByUuid,
   fitSignal = 0,
 }: LiveMapProps) {
-  const selected = selectedTileUuid ? locations.find((t) => t.tile_uuid === selectedTileUuid) : null;
-  const selectedMarkerColor = selected ? tileColorByUuid?.[selected.tile_uuid] ?? "#2563eb" : "#2563eb";
-  const showBreadcrumbs = breadcrumbs && breadcrumbs.length > 1;
+  const selected = findSelectedTile(locations, selectedTileUuid);
+  const selectedMarkerColor = getSelectedMarkerColor(selected, tileColorByUuid);
 
   return (
     <section className="map-frame">
@@ -98,21 +141,14 @@ export function LiveMap({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <ArcGISLayers showNSJRegions={true} />
-        {showBreadcrumbs && <Breadcrumbs points={breadcrumbs} color={breadcrumbColor || "#0f766e"} />}
+        <BreadcrumbOverlay breadcrumbs={breadcrumbs} color={breadcrumbColor} />
         <TileMarkers
           locations={locations}
           selectedTileUuid={selectedTileUuid}
           onTileClick={onTileClick}
           tileColorByUuid={tileColorByUuid}
         />
-        {selected && (
-          <CircleMarker
-            center={[selected.latitude, selected.longitude]}
-            radius={14}
-            pathOptions={{ color: selectedMarkerColor, weight: 2.5, fillOpacity: 0, opacity: 0.55, dashArray: "2 6" }}
-            interactive={false}
-          />
-        )}
+        <SelectedTileHighlight selected={selected} color={selectedMarkerColor} />
       </MapContainer>
     </section>
   );

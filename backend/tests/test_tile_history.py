@@ -49,6 +49,105 @@ def test_tile_history_endpoint_returns_recorded_positions(tmp_path) -> None:
         app.state.history_store = original_store
 
 
+def test_tile_details_endpoint_returns_breakdowns(tmp_path) -> None:
+    original_store = getattr(app.state, "history_store", None)
+    history_store = build_history_store(tmp_path, "details.db")
+    history_store.record(
+        [
+            TileLocation(
+                tile_uuid="device_tracker.tile_details",
+                latitude=38.1,
+                longitude=-81.2,
+                observed_at=datetime(2026, 5, 18, 12, 0, tzinfo=UTC),
+                label="Tile Details",
+            ),
+            TileLocation(
+                tile_uuid="device_tracker.tile_details",
+                latitude=38.1,
+                longitude=-81.2,
+                observed_at=datetime(2026, 5, 18, 13, 0, tzinfo=UTC),
+                label="Tile Details",
+            ),
+            TileLocation(
+                tile_uuid="device_tracker.tile_details",
+                latitude=38.2,
+                longitude=-81.3,
+                observed_at=datetime(2026, 5, 19, 9, 30, tzinfo=UTC),
+                label="Tile Details",
+            ),
+        ]
+    )
+    app.state.history_store = history_store
+
+    try:
+        client = TestClient(app)
+        response = client.get("/tiles/device_tracker.tile_details/details")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["tile_uuid"] == "device_tracker.tile_details"
+        assert payload["total_points"] == 3
+        assert len(payload["daily_breakdown"]) == 2
+        assert payload["daily_breakdown"][0]["date"] == "2026-05-18"
+        assert len(payload["dwell_clusters"]) >= 1
+    finally:
+        app.state.history_store = original_store
+
+
+def test_tile_details_dwell_merge_radius_query_param_changes_cluster_count(tmp_path) -> None:
+    original_store = getattr(app.state, "history_store", None)
+    history_store = build_history_store(tmp_path, "merge-radius.db")
+    history_store.record(
+        [
+            TileLocation(
+                tile_uuid="device_tracker.tile_merge",
+                latitude=38.1000,
+                longitude=-81.2000,
+                observed_at=datetime(2026, 5, 20, 8, 0, tzinfo=UTC),
+                label="Tile Merge",
+            ),
+            TileLocation(
+                tile_uuid="device_tracker.tile_merge",
+                latitude=38.1000,
+                longitude=-81.2000,
+                observed_at=datetime(2026, 5, 20, 8, 20, tzinfo=UTC),
+                label="Tile Merge",
+            ),
+            TileLocation(
+                tile_uuid="device_tracker.tile_merge",
+                latitude=38.1006,
+                longitude=-81.2000,
+                observed_at=datetime(2026, 5, 20, 8, 21, tzinfo=UTC),
+                label="Tile Merge",
+            ),
+            TileLocation(
+                tile_uuid="device_tracker.tile_merge",
+                latitude=38.1006,
+                longitude=-81.2000,
+                observed_at=datetime(2026, 5, 20, 8, 30, tzinfo=UTC),
+                label="Tile Merge",
+            ),
+        ]
+    )
+    app.state.history_store = history_store
+
+    try:
+        client = TestClient(app)
+        split_response = client.get("/tiles/device_tracker.tile_merge/details?dwell_merge_meters=50")
+        merged_response = client.get("/tiles/device_tracker.tile_merge/details?dwell_merge_meters=100")
+
+        assert split_response.status_code == 200
+        assert merged_response.status_code == 200
+
+        split_clusters = split_response.json()["dwell_clusters"]
+        merged_clusters = merged_response.json()["dwell_clusters"]
+
+        assert len(split_clusters) == 2
+        assert len(merged_clusters) == 1
+    finally:
+        app.state.history_store = original_store
+
+
 def test_get_latest_locations_returns_latest_point_per_tile(tmp_path) -> None:
     history_store = build_history_store(tmp_path, "latest.db")
     history_store.record(
@@ -212,3 +311,55 @@ def test_tile_history_persists_across_store_reopen(tmp_path) -> None:
     assert len(history) == 1
     assert history[0].label == "Tile F"
     assert history[0].latitude == 38.7
+
+
+def test_record_keeps_all_points_when_max_is_zero(tmp_path) -> None:
+    history_store = TileHistoryStore(db_path=str(tmp_path / "unlimited.db"), max_points_per_tile=0)
+    history_store.record(
+        [
+            TileLocation(
+                tile_uuid="device_tracker.tile_unlimited",
+                latitude=38.0 + (index * 0.001),
+                longitude=-81.0 - (index * 0.001),
+                observed_at=datetime(2026, 5, 20, 10, index, tzinfo=UTC),
+                label="Tile Unlimited",
+            )
+            for index in range(20)
+        ]
+    )
+
+    history = history_store.get_history("device_tracker.tile_unlimited")
+    assert len(history) == 20
+
+
+def test_build_dwell_clusters_merges_near_points_within_default_50m(tmp_path) -> None:
+    history_store = build_history_store(tmp_path, "distance-clusters.db")
+    history = [
+        TileLocation(
+            tile_uuid="device_tracker.tile_clusters",
+            latitude=38.2000,
+            longitude=-81.1000,
+            observed_at=datetime(2026, 5, 20, 9, 0, tzinfo=UTC),
+            label="Tile Clusters",
+        ),
+        TileLocation(
+            tile_uuid="device_tracker.tile_clusters",
+            latitude=38.2003,
+            longitude=-81.1000,
+            observed_at=datetime(2026, 5, 20, 9, 10, tzinfo=UTC),
+            label="Tile Clusters",
+        ),
+        TileLocation(
+            tile_uuid="device_tracker.tile_clusters",
+            latitude=38.2012,
+            longitude=-81.1000,
+            observed_at=datetime(2026, 5, 20, 9, 20, tzinfo=UTC),
+            label="Tile Clusters",
+        ),
+    ]
+
+    clusters_default = history_store.build_dwell_clusters(history)
+    clusters_wide = history_store.build_dwell_clusters(history, merge_radius_meters=200)
+
+    assert len(clusters_default) == 2
+    assert len(clusters_wide) == 1

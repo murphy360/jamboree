@@ -40,3 +40,29 @@ class TileHistoryResponse(BaseModel):
     tile_uuid: str
     label: str
     items: list[TileLocation]
+
+
+class TileDailySummary(BaseModel):
+    date: str
+    point_count: int
+    start_observed_at: datetime
+    end_observed_at: datetime
+    total_span_minutes: int
+
+
+class TileDwellCluster(BaseModel):
+    latitude: float
+    longitude: float
+    samples: int
+    minutes_spent: int
+
+
+class TileDetailsResponse(BaseModel):
+    tile_uuid: str
+    label: str
+    total_points: int
+    first_observed_at: datetime
+    last_observed_at: datetime
+    items: list[TileLocation]
+    daily_breakdown: list[TileDailySummary]
+    dwell_clusters: list[TileDwellCluster]
