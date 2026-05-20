@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.routes import router
 from src.core.settings import get_settings
+from src.services.area_store import AreaStore
 from src.services.home_assistant_client import HomeAssistantTileClient
 from src.services.history_store import TileHistoryStore
 from src.services.poller import TilePoller
@@ -43,6 +44,7 @@ tile_client = HomeAssistantTileClient(
 )
 app.state.tile_client = tile_client
 app.state.history_store = history_store
+app.state.area_store = AreaStore(db_path=settings.tile_history_db_path)
 poller = TilePoller(tile_client, ws_manager, history_store, settings.tile_poll_interval_seconds)
 app.state.poller = poller
 poller_task: asyncio.Task | None = None

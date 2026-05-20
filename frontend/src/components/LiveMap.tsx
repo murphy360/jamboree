@@ -1,15 +1,20 @@
 import { useEffect, useRef } from "react";
-import { CircleMarker, MapContainer, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import type { Polygon as LeafletPolygon } from "leaflet";
+import { CircleMarker, FeatureGroup, MapContainer, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { ArcGISLayers } from "./ArcGISLayers";
 import { TileMarkers } from "./TileMarkers";
 import type { TileLocation } from "../hooks/useTileLocations";
+import type { AreaPolygonPoint } from "../hooks/useTileDetails";
+import { EditControl } from "react-leaflet-draw";
+import "leaflet-draw/dist/leaflet.draw.css";
 
 type LiveMapProps = {
   locations: TileLocation[];
   selectedTileUuid: string | null;
   onTileClick: (tile: TileLocation) => void;
   onMapClick: () => void;
+  onDrawPolygon?: (points: AreaPolygonPoint[]) => void | Promise<void>;
   breadcrumbs?: TileLocation[];
   breadcrumbColor?: string;
   tileColorByUuid?: Record<string, string>;
@@ -118,11 +123,31 @@ function BreadcrumbOverlay({ breadcrumbs, color }: { breadcrumbs?: TileLocation[
   return <Breadcrumbs points={breadcrumbs} color={color || "#0f766e"} />;
 }
 
+function toPolygonPoints(layer: LeafletPolygon): AreaPolygonPoint[] {
+  const latLngs = layer.getLatLngs();
+  const firstRing = Array.isArray(latLngs[0]) ? latLngs[0] : latLngs;
+  const points = (firstRing as { lat: number; lng: number }[]).map((item) => ({
+    latitude: item.lat,
+    longitude: item.lng,
+  }));
+
+  if (points.length > 1) {
+    const first = points[0];
+    const last = points[points.length - 1];
+    if (first.latitude === last.latitude && first.longitude === last.longitude) {
+      points.pop();
+    }
+  }
+
+  return points;
+}
+
 export function LiveMap({
   locations,
   selectedTileUuid,
   onTileClick,
   onMapClick,
+  onDrawPolygon,
   breadcrumbs,
   breadcrumbColor,
   tileColorByUuid,
@@ -149,7 +174,30 @@ export function LiveMap({
           tileColorByUuid={tileColorByUuid}
         />
         <SelectedTileHighlight selected={selected} color={selectedMarkerColor} />
+        <FeatureGroup>
+          <EditControl
+            position="topright"
+            onCreated={(e) => {
+              const layer = e.layer;
+              if (!("getLatLngs" in layer)) {
+                return;
+              }
+              const polygonPoints = toPolygonPoints(layer as LeafletPolygon);
+              layer.remove();
+              void onDrawPolygon?.(polygonPoints);
+            }}
+            draw={{
+              rectangle: false,
+              circle: false,
+              marker: false,
+              polyline: false,
+              circlemarker: false,
+            }}
+          />
+        </FeatureGroup>
       </MapContainer>
     </section>
   );
 }
+
+export default LiveMap;

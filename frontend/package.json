@@ -11,12 +11,16 @@
   },
   "dependencies": {
     "@types/esri-leaflet": "^3.0.4",
+    "@types/leaflet-draw": "^1.0.13",
     "esri-leaflet": "^3.0.12",
     "esri-leaflet-vector": "^4.2.1",
     "leaflet": "^1.9.4",
+    "leaflet-draw": "^1.0.4",
+    "prop-types": "^15.8.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-leaflet": "^4.2.1"
+    "react-leaflet": "^4.2.1",
+    "react-leaflet-draw": "^0.20.6"
   },
   "devDependencies": {
     "@types/geojson": "^7946.0.16",

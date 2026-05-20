@@ -16,6 +16,22 @@ export type TileDwellCluster = {
   minutes_spent: number;
 };
 
+export type AreaPolygonPoint = {
+  latitude: number;
+  longitude: number;
+};
+
+export type CustomArea = {
+  area_id: string;
+  tile_uuid: string;
+  name: string;
+  polygon: AreaPolygonPoint[];
+  samples: number;
+  minutes_spent: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export type TileDetails = {
   tile_uuid: string;
   label: string;
@@ -25,9 +41,14 @@ export type TileDetails = {
   items: TileLocation[];
   daily_breakdown: TileDailySummary[];
   dwell_clusters: TileDwellCluster[];
+  custom_areas: CustomArea[];
 };
 
-export function useTileDetails(baseUrl: string, tileUuid: string | null) {
+export function useTileDetails(
+  baseUrl: string,
+  tileUuid: string | null,
+  refreshKey = 0,
+) {
   const [details, setDetails] = useState<TileDetails | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -73,7 +94,7 @@ export function useTileDetails(baseUrl: string, tileUuid: string | null) {
     return () => {
       cancelled = true;
     };
-  }, [normalizedBaseUrl, tileUuid]);
+  }, [normalizedBaseUrl, tileUuid, refreshKey]);
 
   return { details, loading };
 }

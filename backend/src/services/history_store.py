@@ -6,7 +6,8 @@ from math import asin, cos, radians, sin, sqrt
 from pathlib import Path
 from threading import Lock
 
-from src.services.models import TileDailySummary, TileDwellCluster, TileLocation
+from src.services.area_store import point_in_polygon
+from src.services.models import CustomArea, TileDailySummary, TileDwellCluster, TileLocation
 
 
 def _haversine_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -270,9 +271,16 @@ class TileHistoryStore:
         history: list[TileLocation],
         max_gap_minutes: int = 30,
         merge_radius_meters: float = 50.0,
+        areas: list[CustomArea] | None = None,
     ) -> list[TileDwellCluster]:
         if not history:
             return []
+
+        if areas:
+            history = [
+                pt for pt in history
+                if not any(point_in_polygon(pt.latitude, pt.longitude, a.polygon) for a in areas)
+            ]
 
         per_cluster: list[dict[str, float | int]] = []
         max_gap_seconds = max_gap_minutes * 60

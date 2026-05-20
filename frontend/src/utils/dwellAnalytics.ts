@@ -1,4 +1,5 @@
 import type { TileLocation } from "../hooks/useTileLocations";
+import type { AreaPolygonPoint } from "../hooks/useTileDetails";
 
 export type DwellViewMode = "timeline" | "overall";
 export type DwellTimeFilter = "day" | "week" | "month" | "year" | "ever";
@@ -38,6 +39,51 @@ type PointWithTime = {
 };
 
 const EARTH_RADIUS_METERS = 6_371_000;
+
+function pointInPolygon(lat: number, lon: number, polygon: AreaPolygonPoint[]): boolean {
+  const n = polygon.length;
+  if (n < 3) return false;
+  const epsilon = 1e-9;
+
+  const pointOnSegment = (
+    pointLat: number,
+    pointLon: number,
+    startLat: number,
+    startLon: number,
+    endLat: number,
+    endLon: number,
+  ): boolean => {
+    const cross = (pointLat - startLat) * (endLon - startLon) - (pointLon - startLon) * (endLat - startLat);
+    if (Math.abs(cross) > epsilon) return false;
+
+    const dot = (pointLat - startLat) * (endLat - startLat) + (pointLon - startLon) * (endLon - startLon);
+    if (dot < -epsilon) return false;
+
+    const squaredLen = (endLat - startLat) ** 2 + (endLon - startLon) ** 2;
+    return dot <= squaredLen + epsilon;
+  };
+
+  let inside = false;
+  let j = n - 1;
+  for (let i = 0; i < n; i++) {
+    const piLat = polygon[i].latitude;
+    const piLon = polygon[i].longitude;
+    const pjLat = polygon[j].latitude;
+    const pjLon = polygon[j].longitude;
+
+    if (pointOnSegment(lat, lon, piLat, piLon, pjLat, pjLon)) return true;
+
+    const lonCrosses = (piLon > lon) !== (pjLon > lon);
+    if (lonCrosses) {
+      const latIntersect =
+        ((pjLat - piLat) * (lon - piLon)) / (pjLon - piLon) +
+        piLat;
+      if (lat < latIntersect) inside = !inside;
+    }
+    j = i;
+  }
+  return inside;
+}
 
 function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const toRadians = (value: number) => (value * Math.PI) / 180;
@@ -132,18 +178,30 @@ export function analyzeDwellHotspots(
   referenceIso: string,
   mergeRadiusMeters = 50,
   maxGapMinutes = 30,
+  excludeAreaPolygons: AreaPolygonPoint[][] = [],
 ): { overall: DwellOverallRow[]; visits: DwellVisitRow[] } {
   const points = normalizePoints(items, filter, referenceIso);
   if (points.length === 0) {
     return { overall: [], visits: [] };
   }
 
-  const clusterResult = assignPointsToClusters(points, mergeRadiusMeters);
-  applyClusterDurations(clusterResult.clusters, points, clusterResult.pointHotspotIds, maxGapMinutes);
+  const filtered =
+    excludeAreaPolygons.length > 0
+      ? points.filter(
+          (pt) => !excludeAreaPolygons.some((poly) => pointInPolygon(pt.latitude, pt.longitude, poly)),
+        )
+      : points;
+
+  if (filtered.length === 0) {
+    return { overall: [], visits: [] };
+  }
+
+  const clusterResult = assignPointsToClusters(filtered, mergeRadiusMeters);
+  applyClusterDurations(clusterResult.clusters, filtered, clusterResult.pointHotspotIds, maxGapMinutes);
 
   return {
     overall: buildOverallRows(clusterResult.clusters),
-    visits: buildVisitRows(clusterResult.clusters, points, clusterResult.pointHotspotIds, maxGapMinutes),
+    visits: buildVisitRows(clusterResult.clusters, filtered, clusterResult.pointHotspotIds, maxGapMinutes),
   };
 }
 

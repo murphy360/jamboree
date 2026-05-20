@@ -57,6 +57,34 @@ class TileDwellCluster(BaseModel):
     minutes_spent: int
 
 
+class AreaPolygonPoint(BaseModel):
+    latitude: float
+    longitude: float
+
+
+class CustomArea(BaseModel):
+    area_id: str
+    tile_uuid: str
+    name: str
+    polygon: list[AreaPolygonPoint]
+    samples: int = 0
+    minutes_spent: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class CreateAreaRequest(BaseModel):
+    name: str
+    cluster_centers: list[AreaPolygonPoint]
+    hotspot_centers: list[AreaPolygonPoint] = []
+    merge_into_area_id: str | None = None
+    merge_source_area_ids: list[str] = []
+
+
+class UpdateAreaRequest(BaseModel):
+    name: str
+
+
 class TileDetailsResponse(BaseModel):
     tile_uuid: str
     label: str
@@ -66,3 +94,4 @@ class TileDetailsResponse(BaseModel):
     items: list[TileLocation]
     daily_breakdown: list[TileDailySummary]
     dwell_clusters: list[TileDwellCluster]
+    custom_areas: list[CustomArea] = []

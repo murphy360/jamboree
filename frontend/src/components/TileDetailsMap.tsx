@@ -1,11 +1,20 @@
-import { CircleMarker, MapContainer, Polyline, TileLayer } from "react-leaflet";
+import { useEffect } from "react";
+import { CircleMarker, MapContainer, Polygon, Polyline, TileLayer, Tooltip, useMap } from "react-leaflet";
 import { ArcGISLayers } from "./ArcGISLayers";
-import type { TileDwellCluster } from "../hooks/useTileDetails";
+import type { TileDwellCluster, CustomArea } from "../hooks/useTileDetails";
 import type { TileLocation } from "../hooks/useTileLocations";
+
+type SelectedHotspot = {
+  latitude: number;
+  longitude: number;
+  label: string;
+};
 
 type TileDetailsMapProps = {
   history: TileLocation[];
   dwellClusters: TileDwellCluster[];
+  customAreas?: CustomArea[];
+  selectedHotspot?: SelectedHotspot | null;
 };
 
 const DEFAULT_CENTER: [number, number] = [38.076, -81.073];
@@ -26,7 +35,62 @@ function getIntensityColor(ratio: number): string {
   return "#22c55e";
 }
 
-export function TileDetailsMap({ history, dwellClusters }: TileDetailsMapProps) {
+function FocusSelectedHotspot({ selectedHotspot }: { selectedHotspot?: SelectedHotspot | null }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!selectedHotspot) {
+      return;
+    }
+
+    map.panTo([selectedHotspot.latitude, selectedHotspot.longitude], { animate: true });
+  }, [map, selectedHotspot]);
+
+  return null;
+}
+
+function DwellClusterMarkers({ clusters, maxMinutes }: { clusters: TileDwellCluster[]; maxMinutes: number }) {
+  return (
+    <>
+      {clusters.slice(0, 60).map((cluster) => {
+        const ratio = maxMinutes > 0 ? cluster.minutes_spent / maxMinutes : 0;
+        const color = getIntensityColor(ratio);
+        const radius = Math.min(16, 4 + Math.round(ratio * 12));
+        return (
+          <CircleMarker
+            key={`${cluster.latitude}-${cluster.longitude}-${cluster.samples}`}
+            center={[cluster.latitude, cluster.longitude]}
+            radius={radius}
+            pathOptions={{ color, fillColor: color, fillOpacity: 0.3 + ratio * 0.45, weight: 1.5 }}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+function AreaPolygons({ areas }: { areas: CustomArea[] }) {
+  return (
+    <>
+      {areas.map((area) => {
+        const positions = area.polygon.map((pt) => [pt.latitude, pt.longitude] as [number, number]);
+        return (
+          <Polygon
+            key={area.area_id}
+            positions={positions}
+            pathOptions={{ color: "#7c3aed", fillColor: "#a78bfa", fillOpacity: 0.25, weight: 2 }}
+          >
+            <Tooltip permanent direction="center" className="tile-area-label">
+              {area.name}
+            </Tooltip>
+          </Polygon>
+        );
+      })}
+    </>
+  );
+}
+
+export function TileDetailsMap({ history, dwellClusters, customAreas = [], selectedHotspot }: TileDetailsMapProps) {
   const path = history.map((item) => [item.latitude, item.longitude] as [number, number]);
   const start = history[0];
   const end = history[history.length - 1];
@@ -39,6 +103,7 @@ export function TileDetailsMap({ history, dwellClusters }: TileDetailsMapProps) 
         zoom={15}
         className="tile-details-map"
       >
+        <FocusSelectedHotspot selectedHotspot={selectedHotspot} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -59,20 +124,19 @@ export function TileDetailsMap({ history, dwellClusters }: TileDetailsMapProps) 
             pathOptions={{ color: "#166534", fillColor: "#22c55e", fillOpacity: 0.9 }}
           />
         ) : null}
-        {dwellClusters.slice(0, 60).map((cluster) => {
-          const ratio = maxMinutes > 0 ? cluster.minutes_spent / maxMinutes : 0;
-          const color = getIntensityColor(ratio);
-          const radius = Math.min(16, 4 + Math.round(ratio * 12));
-
-          return (
-            <CircleMarker
-              key={`${cluster.latitude}-${cluster.longitude}-${cluster.samples}`}
-              center={[cluster.latitude, cluster.longitude]}
-              radius={radius}
-              pathOptions={{ color, fillColor: color, fillOpacity: 0.3 + ratio * 0.45, weight: 1.5 }}
-            />
-          );
-        })}
+        <DwellClusterMarkers clusters={dwellClusters} maxMinutes={maxMinutes} />
+        <AreaPolygons areas={customAreas} />
+        {selectedHotspot ? (
+          <CircleMarker
+            center={[selectedHotspot.latitude, selectedHotspot.longitude]}
+            radius={12}
+            pathOptions={{ color: "#0f172a", fillColor: "#facc15", fillOpacity: 0.9, weight: 3 }}
+          >
+            <Tooltip permanent direction="top" offset={[0, -10]}>
+              {selectedHotspot.label}
+            </Tooltip>
+          </CircleMarker>
+        ) : null}
       </MapContainer>
     </section>
   );

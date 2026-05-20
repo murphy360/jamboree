@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTileHistory } from "../hooks/useTileHistory";
+import { useCustomAreas } from "../hooks/useCustomAreas";
 import type { TileLocation } from "../hooks/useTileLocations";
+import type { AreaPolygonPoint } from "../hooks/useTileDetails";
 import {
   buildSortedTileEntries,
   buildTileColorMap,
@@ -182,6 +184,38 @@ function HistoryHeader({
 
 export function LiveTrackerView({ backendUrl, locations, onOpenDetails }: LiveTrackerViewProps) {
   const state = useLiveTrackerState(backendUrl, locations);
+  const areaApiTileUuid = state.selectedTileUuid ?? locations[0]?.tile_uuid ?? "global";
+  const { createArea } = useCustomAreas({
+    baseUrl: backendUrl,
+    tileUuid: areaApiTileUuid,
+    onRefresh: () => {
+      // No explicit refresh action needed on the live map panel.
+    },
+  });
+
+  const handleDrawPolygon = useCallback(
+    async (points: AreaPolygonPoint[]) => {
+      if (points.length < 3) {
+        window.alert("A polygon needs at least 3 points.");
+        return;
+      }
+
+      const suggestedName = state.selectedTile ? `${state.selectedTile.label} Area` : "Custom Area";
+      const input = window.prompt("Name this area:", suggestedName);
+      const name = input?.trim();
+      if (!name) {
+        return;
+      }
+
+      try {
+        await createArea(name, points);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to create area.";
+        window.alert(message);
+      }
+    },
+    [createArea, state.selectedTile, state.selectedTileUuid],
+  );
 
   return (
     <>
@@ -201,6 +235,7 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails }: LiveTr
           selectedTileUuid={state.selectedTileUuid}
           onTileClick={state.onSelectTile}
           onMapClick={state.onClearSelection}
+          onDrawPolygon={handleDrawPolygon}
           breadcrumbs={state.displayedHistory}
           breadcrumbColor={BREADCRUMB_COLOR}
           tileColorByUuid={state.tileColorByUuid}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { LiveTrackerView } from "./components/LiveTrackerView";
 import { useSystemStatus } from "./hooks/useSystemStatus";
 import { useTileDetails } from "./hooks/useTileDetails";
@@ -13,7 +13,9 @@ export function App() {
   const { locations, connected } = useTileLocations(WS_URL);
   const { backendConnected, homeAssistantConnected, tileCount } = useSystemStatus(BACKEND_URL);
   const [detailsTileUuid, setDetailsTileUuid] = useState<string | null>(null);
-  const { details, loading: detailsLoading } = useTileDetails(BACKEND_URL, detailsTileUuid);
+  const [detailsRefreshKey, setDetailsRefreshKey] = useState(0);
+  const { details, loading: detailsLoading } = useTileDetails(BACKEND_URL, detailsTileUuid, detailsRefreshKey);
+  const handleRefreshDetails = useCallback(() => setDetailsRefreshKey((k) => k + 1), []);
 
   const handleOpenDetails = (tileUuid: string) => {
     setDetailsTileUuid(tileUuid);
@@ -42,7 +44,14 @@ export function App() {
       </header>
 
       {detailsTileUuid ? (
-        <TileDetailsPage details={details} loading={detailsLoading} onBack={handleCloseDetails} />
+        <TileDetailsPage
+          details={details}
+          loading={detailsLoading}
+          onBack={handleCloseDetails}
+          baseUrl={BACKEND_URL}
+          tileUuid={detailsTileUuid}
+          onRefreshDetails={handleRefreshDetails}
+        />
       ) : (
         <LiveTrackerView backendUrl={BACKEND_URL} locations={locations} onOpenDetails={handleOpenDetails} />
       )}

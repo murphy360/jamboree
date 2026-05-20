@@ -1,0 +1,418 @@
+"""Persistent storage and spatial logic for named custom areas."""
+
+from __future__ import annotations
+
+import json
+import math
+import sqlite3
+import uuid
+from datetime import UTC, datetime
+from pathlib import Path
+from threading import Lock
+
+from src.services.models import AreaPolygonPoint, CustomArea, TileLocation
+
+
+# ---------------------------------------------------------------------------
+# Spatial utilities
+# ---------------------------------------------------------------------------
+
+
+def _hull_cross(
+    origin: tuple[float, float],
+    point_a: tuple[float, float],
+    point_b: tuple[float, float],
+) -> float:
+    """Cross product of vectors origin→A and origin→B using (lat, lon) tuples."""
+    return (point_a[0] - origin[0]) * (point_b[1] - origin[1]) - (
+        point_a[1] - origin[1]
+    ) * (point_b[0] - origin[0])
+
+
+def convex_hull(
+    points: list[tuple[float, float]],
+) -> list[tuple[float, float]]:
+    """Compute the convex hull of (lat, lon) pairs using Andrew's monotone chain.
+
+    Returns the hull vertices in counter-clockwise order.
+    Raises ValueError when fewer than 3 non-collinear points are provided.
+    """
+    pts = sorted(set(points))
+    if len(pts) < 3:
+        raise ValueError("At least 3 distinct cluster centers are required.")
+
+    lower: list[tuple[float, float]] = []
+    for p in pts:
+        while len(lower) >= 2 and _hull_cross(lower[-2], lower[-1], p) <= 0:
+            lower.pop()
+        lower.append(p)
+
+    upper: list[tuple[float, float]] = []
+    for p in reversed(pts):
+        while len(upper) >= 2 and _hull_cross(upper[-2], upper[-1], p) <= 0:
+            upper.pop()
+        upper.append(p)
+
+    hull = lower[:-1] + upper[:-1]
+    if len(hull) < 3:
+        raise ValueError(
+            "Selected clusters are collinear; choose non-collinear hotspots to form an area."
+        )
+    return hull
+
+
+def point_in_polygon(
+    lat: float, lon: float, polygon: list[AreaPolygonPoint]
+) -> bool:
+    """Ray-casting test: True if (lat, lon) is inside the closed polygon."""
+    n = len(polygon)
+    if n < 3:
+        return False
+
+    epsilon = 1e-9
+
+    def point_on_segment(
+        point_lat: float,
+        point_lon: float,
+        start_lat: float,
+        start_lon: float,
+        end_lat: float,
+        end_lon: float,
+    ) -> bool:
+        cross = (point_lat - start_lat) * (end_lon - start_lon) - (
+            point_lon - start_lon
+        ) * (end_lat - start_lat)
+        if abs(cross) > epsilon:
+            return False
+
+        dot = (point_lat - start_lat) * (end_lat - start_lat) + (
+            point_lon - start_lon
+        ) * (end_lon - start_lon)
+        if dot < -epsilon:
+            return False
+
+        squared_len = (end_lat - start_lat) ** 2 + (end_lon - start_lon) ** 2
+        return dot <= squared_len + epsilon
+
+    inside = False
+    j = n - 1
+    for i in range(n):
+        pi_lat = polygon[i].latitude
+        pi_lon = polygon[i].longitude
+        pj_lat = polygon[j].latitude
+        pj_lon = polygon[j].longitude
+
+        if point_on_segment(lat, lon, pi_lat, pi_lon, pj_lat, pj_lon):
+            return True
+
+        lon_crosses = (pi_lon > lon) != (pj_lon > lon)
+        if lon_crosses:
+            lat_intersect = (pj_lat - pi_lat) * (lon - pi_lon) / (
+                pj_lon - pi_lon
+            ) + pi_lat
+            if lat < lat_intersect:
+                inside = not inside
+        j = i
+
+    return inside
+
+
+# ---------------------------------------------------------------------------
+# AreaStore
+# ---------------------------------------------------------------------------
+
+
+class AreaStore:
+    """Manages persistence and stats for custom named areas."""
+
+    def __init__(self, db_path: str) -> None:
+        self._lock = Lock()
+        db_file = Path(db_path)
+        db_file.parent.mkdir(parents=True, exist_ok=True)
+        self._connection = sqlite3.connect(str(db_file), check_same_thread=False)
+        self._connection.row_factory = sqlite3.Row
+        self._connection.execute("PRAGMA journal_mode=WAL")
+        self._init_schema()
+
+    def _init_schema(self) -> None:
+        with self._lock:
+            self._connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS custom_areas (
+                    area_id TEXT PRIMARY KEY,
+                    tile_uuid TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    polygon_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_custom_areas_tile
+                ON custom_areas (tile_uuid)
+                """
+            )
+            self._connection.commit()
+
+    # ------------------------------------------------------------------
+    # CRUD
+    # ------------------------------------------------------------------
+
+    def create_area(
+        self,
+        tile_uuid: str,
+        name: str,
+        cluster_centers: list[AreaPolygonPoint | tuple[float, float]],
+    ) -> CustomArea:
+        """Compute convex hull of cluster centers and persist the area."""
+        raw_points: list[tuple[float, float]] = []
+        for center in cluster_centers:
+            if isinstance(center, tuple):
+                raw_points.append((center[0], center[1]))
+            else:
+                raw_points.append((center.latitude, center.longitude))
+        hull = convex_hull(raw_points)
+        polygon = [AreaPolygonPoint(latitude=lat, longitude=lon) for lat, lon in hull]
+        area_id = str(uuid.uuid4())
+        now = datetime.now(UTC).isoformat()
+        polygon_json = json.dumps(
+            [{"latitude": p.latitude, "longitude": p.longitude} for p in polygon]
+        )
+
+        with self._lock:
+            self._connection.execute(
+                """
+                INSERT INTO custom_areas
+                    (area_id, tile_uuid, name, polygon_json, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (area_id, tile_uuid, name, polygon_json, now, now),
+            )
+            self._connection.commit()
+
+        return CustomArea(
+            area_id=area_id,
+            tile_uuid=tile_uuid,
+            name=name,
+            polygon=polygon,
+            created_at=datetime.fromisoformat(now),
+            updated_at=datetime.fromisoformat(now),
+        )
+
+    def merge_area(
+        self,
+        tile_uuid: str,
+        merge_into_area_id: str,
+        cluster_centers: list[AreaPolygonPoint],
+        hotspot_centers: list[AreaPolygonPoint] | None = None,
+        merge_source_area_ids: list[str] | None = None,
+        hotspot_buffer_meters: float = 50,
+    ) -> CustomArea:
+        merge_source_area_ids = merge_source_area_ids or []
+        hotspot_centers = hotspot_centers or []
+        target = self._get_area_by_id(merge_into_area_id)
+        if not target:
+            raise ValueError("Merge target area was not found.")
+
+        source_ids = {area_id for area_id in merge_source_area_ids if area_id != merge_into_area_id}
+        source_areas = [self._get_area_by_id(area_id) for area_id in source_ids]
+        if any(area is None for area in source_areas):
+            raise ValueError("One or more merge source areas were not found.")
+
+        validated_sources = []
+        for area in source_areas:
+            assert area is not None
+            validated_sources.append(area)
+
+        points: list[tuple[float, float]] = [
+            (point.latitude, point.longitude) for point in target.polygon
+        ]
+        points.extend((point.latitude, point.longitude) for point in cluster_centers)
+        for center in hotspot_centers:
+            points.extend(
+                self._buffer_point(
+                    center.latitude,
+                    center.longitude,
+                    hotspot_buffer_meters,
+                )
+            )
+        for source in validated_sources:
+            points.extend((point.latitude, point.longitude) for point in source.polygon)
+
+        hull = convex_hull(points)
+        polygon = [AreaPolygonPoint(latitude=lat, longitude=lon) for lat, lon in hull]
+        polygon_json = json.dumps(
+            [{"latitude": p.latitude, "longitude": p.longitude} for p in polygon]
+        )
+        now = datetime.now(UTC).isoformat()
+
+        with self._lock:
+            self._connection.execute(
+                """
+                UPDATE custom_areas
+                SET polygon_json = ?, updated_at = ?
+                WHERE area_id = ?
+                """,
+                (polygon_json, now, merge_into_area_id),
+            )
+
+            if source_ids:
+                placeholders = ",".join("?" for _ in source_ids)
+                self._connection.execute(
+                    f"DELETE FROM custom_areas WHERE area_id IN ({placeholders})",
+                    tuple(source_ids),
+                )
+
+            self._connection.commit()
+
+        updated = self._get_area_by_id(merge_into_area_id)
+        if not updated:
+            raise ValueError("Merged area could not be loaded after update.")
+        return updated
+
+    def get_areas(self, tile_uuid: str) -> list[CustomArea]:
+        _ = tile_uuid
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT area_id, tile_uuid, name, polygon_json, created_at, updated_at
+                FROM custom_areas
+                ORDER BY created_at ASC
+                """
+            ).fetchall()
+
+        return [self._row_to_area(row) for row in rows]
+
+    def update_area(self, area_id: str, name: str) -> CustomArea | None:
+        now = datetime.now(UTC).isoformat()
+        with self._lock:
+            self._connection.execute(
+                "UPDATE custom_areas SET name = ?, updated_at = ? WHERE area_id = ?",
+                (name, now, area_id),
+            )
+            self._connection.commit()
+            row = self._connection.execute(
+                """
+                SELECT area_id, tile_uuid, name, polygon_json, created_at, updated_at
+                FROM custom_areas WHERE area_id = ?
+                """,
+                (area_id,),
+            ).fetchone()
+
+        return self._row_to_area(row) if row else None
+
+    def delete_area(self, area_id: str) -> bool:
+        with self._lock:
+            cursor = self._connection.execute(
+                "DELETE FROM custom_areas WHERE area_id = ?", (area_id,)
+            )
+            self._connection.commit()
+        return cursor.rowcount > 0
+
+    # ------------------------------------------------------------------
+    # Stats computation
+    # ------------------------------------------------------------------
+
+    def compute_area_stats(
+        self,
+        history: list[TileLocation],
+        areas: list[CustomArea],
+        max_gap_minutes: int = 30,
+    ) -> list[CustomArea]:
+        """Return areas with samples and minutes_spent populated from history."""
+        max_gap_seconds = max_gap_minutes * 60
+        result: list[CustomArea] = []
+
+        for area in areas:
+            area_points = [
+                pt
+                for pt in history
+                if point_in_polygon(pt.latitude, pt.longitude, area.polygon)
+            ]
+            samples = len(area_points)
+            seconds_spent = 0
+            for idx in range(len(area_points) - 1):
+                gap = int(
+                    (
+                        area_points[idx + 1].observed_at - area_points[idx].observed_at
+                    ).total_seconds()
+                )
+                seconds_spent += min(max(gap, 0), max_gap_seconds)
+
+            result.append(
+                CustomArea(
+                    area_id=area.area_id,
+                    tile_uuid=area.tile_uuid,
+                    name=area.name,
+                    polygon=area.polygon,
+                    samples=samples,
+                    minutes_spent=seconds_spent // 60,
+                    created_at=area.created_at,
+                    updated_at=area.updated_at,
+                )
+            )
+
+        return result
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _row_to_area(self, row: sqlite3.Row) -> CustomArea:
+        polygon = [
+            AreaPolygonPoint(latitude=p["latitude"], longitude=p["longitude"])
+            for p in json.loads(row["polygon_json"])
+        ]
+        return CustomArea(
+            area_id=row["area_id"],
+            tile_uuid=row["tile_uuid"],
+            name=row["name"],
+            polygon=polygon,
+            created_at=datetime.fromisoformat(row["created_at"]),
+            updated_at=datetime.fromisoformat(row["updated_at"]),
+        )
+
+    def _get_area_by_id(self, area_id: str) -> CustomArea | None:
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT area_id, tile_uuid, name, polygon_json, created_at, updated_at
+                FROM custom_areas
+                WHERE area_id = ?
+                """,
+                (area_id,),
+            ).fetchone()
+        return self._row_to_area(row) if row else None
+
+    def _buffer_point(
+        self,
+        latitude: float,
+        longitude: float,
+        radius_meters: float,
+        sides: int = 12,
+    ) -> list[tuple[float, float]]:
+        if radius_meters <= 0:
+            return [(latitude, longitude)]
+
+        meters_per_degree_lat = 111_320.0
+        cos_lat = math.cos(math.radians(latitude))
+        meters_per_degree_lon = meters_per_degree_lat * max(abs(cos_lat), 1e-6)
+        lat_delta = radius_meters / meters_per_degree_lat
+        lon_delta = radius_meters / meters_per_degree_lon
+
+        buffered: list[tuple[float, float]] = []
+        for index in range(sides):
+            angle = 2 * math.pi * (index / sides)
+            buffered.append(
+                (
+                    latitude + lat_delta * math.sin(angle),
+                    longitude + lon_delta * math.cos(angle),
+                )
+            )
+        return buffered
+
+    def close(self) -> None:
+        with self._lock:
+            self._connection.close()
