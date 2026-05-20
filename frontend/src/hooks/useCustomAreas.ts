@@ -1,5 +1,6 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
 import type { AreaPolygonPoint } from "./useTileDetails";
+import type { CustomArea } from "../types/react-leaflet-core";
 
 type UseCustomAreasOptions = {
   baseUrl: string;
@@ -16,15 +17,30 @@ type CreateAreaOptions = {
 export function useCustomAreas({ baseUrl, tileUuid, onRefresh }: UseCustomAreasOptions) {
   const normalizedBaseUrl = useMemo(() => baseUrl.trim().replace(/\/$/, ""), [baseUrl]);
 
+  const [areas, setAreas] = useState<CustomArea[]>([]);
+
+  useEffect(() => {
+    const fetchAreas = async () => {
+      if (!tileUuid || !baseUrl) return;
+      const response = await fetch(`${baseUrl}/tiles/${encodeURIComponent(tileUuid)}/areas`);
+      if (response.ok) {
+        const data = await response.json();
+        // Backend returns a list directly, not an object with areas property
+        setAreas(Array.isArray(data) ? data : data.areas || []);
+      }
+    };
+    fetchAreas();
+  }, [baseUrl, tileUuid]);
+
   const createArea = useCallback(
     async (name: string, clusterCenters: AreaPolygonPoint[], options?: CreateAreaOptions): Promise<void> => {
-      if (!tileUuid || !normalizedBaseUrl) {
+      if (!tileUuid || !baseUrl) {
         return;
       }
       const mergeSourceAreaIds = options?.mergeSourceAreaIds ?? [];
       const hotspotCenters = options?.hotspotCenters ?? [];
       const response = await fetch(
-        `${normalizedBaseUrl}/tiles/${encodeURIComponent(tileUuid)}/areas`,
+        `${baseUrl}/tiles/${encodeURIComponent(tileUuid)}/areas`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -43,16 +59,16 @@ export function useCustomAreas({ baseUrl, tileUuid, onRefresh }: UseCustomAreasO
       }
       onRefresh();
     },
-    [normalizedBaseUrl, tileUuid, onRefresh],
+    [baseUrl, tileUuid, onRefresh],
   );
 
   const renameArea = useCallback(
     async (areaId: string, name: string): Promise<void> => {
-      if (!tileUuid || !normalizedBaseUrl) {
+      if (!tileUuid || !baseUrl) {
         return;
       }
       const response = await fetch(
-        `${normalizedBaseUrl}/tiles/${encodeURIComponent(tileUuid)}/areas/${encodeURIComponent(areaId)}`,
+        `${baseUrl}/tiles/${encodeURIComponent(tileUuid)}/areas/${encodeURIComponent(areaId)}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -64,16 +80,16 @@ export function useCustomAreas({ baseUrl, tileUuid, onRefresh }: UseCustomAreasO
       }
       onRefresh();
     },
-    [normalizedBaseUrl, tileUuid, onRefresh],
+    [baseUrl, tileUuid, onRefresh],
   );
 
   const deleteArea = useCallback(
     async (areaId: string): Promise<void> => {
-      if (!tileUuid || !normalizedBaseUrl) {
+      if (!tileUuid || !baseUrl) {
         return;
       }
       const response = await fetch(
-        `${normalizedBaseUrl}/tiles/${encodeURIComponent(tileUuid)}/areas/${encodeURIComponent(areaId)}`,
+        `${baseUrl}/tiles/${encodeURIComponent(tileUuid)}/areas/${encodeURIComponent(areaId)}`,
         { method: "DELETE" },
       );
       if (!response.ok && response.status !== 404) {
@@ -81,8 +97,8 @@ export function useCustomAreas({ baseUrl, tileUuid, onRefresh }: UseCustomAreasO
       }
       onRefresh();
     },
-    [normalizedBaseUrl, tileUuid, onRefresh],
+    [baseUrl, tileUuid, onRefresh],
   );
 
-  return { createArea, renameArea, deleteArea };
+  return { areas, createArea, renameArea, deleteArea };
 }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTileHistory } from "../hooks/useTileHistory";
 import { useCustomAreas } from "../hooks/useCustomAreas";
 import type { TileLocation } from "../hooks/useTileLocations";
-import type { AreaPolygonPoint } from "../hooks/useTileDetails";
+import type { AreaPolygonPoint, CustomArea } from "../hooks/useTileDetails";
 import {
   buildSortedTileEntries,
   buildTileColorMap,
@@ -17,6 +17,13 @@ type LiveTrackerViewProps = {
   backendUrl: string;
   locations: TileLocation[];
   onOpenDetails: (tileUuid: string) => void;
+};
+
+type TileListMode = "all" | "areas" | "moving";
+
+type AreaGroupedTileList = {
+  area: CustomArea;
+  entries: TileListEntry[];
 };
 
 type LiveTrackerState = {
@@ -38,6 +45,55 @@ type LiveTrackerState = {
 
 const BREADCRUMB_OPTIONS = [10, 25, 50, 100];
 const BREADCRUMB_COLOR = "#f59e42";
+
+function pointInPolygon(lat: number, lon: number, polygon: AreaPolygonPoint[]): boolean {
+  const n = polygon.length;
+  if (n < 3) return false;
+  const epsilon = 1e-9;
+
+  const pointOnSegment = (
+    pointLat: number,
+    pointLon: number,
+    startLat: number,
+    startLon: number,
+    endLat: number,
+    endLon: number,
+  ): boolean => {
+    const cross = (pointLat - startLat) * (endLon - startLon) - (pointLon - startLon) * (endLat - startLat);
+    if (Math.abs(cross) > epsilon) return false;
+
+    const dot = (pointLat - startLat) * (endLat - startLat) + (pointLon - startLon) * (endLon - startLon);
+    if (dot < -epsilon) return false;
+
+    const squaredLen = (endLat - startLat) ** 2 + (endLon - startLon) ** 2;
+    return dot <= squaredLen + epsilon;
+  };
+
+  let inside = false;
+  let j = n - 1;
+  for (let i = 0; i < n; i++) {
+    const piLat = polygon[i].latitude;
+    const piLon = polygon[i].longitude;
+    const pjLat = polygon[j].latitude;
+    const pjLon = polygon[j].longitude;
+
+    if (pointOnSegment(lat, lon, piLat, piLon, pjLat, pjLon)) return true;
+
+    const lonCrosses = (piLon > lon) !== (pjLon > lon);
+    if (lonCrosses) {
+      const latIntersect =
+        ((pjLat - piLat) * (lon - piLon)) / (pjLon - piLon) +
+        piLat;
+      if (lat < latIntersect) inside = !inside;
+    }
+    j = i;
+  }
+  return inside;
+}
+
+function findContainingArea(tile: TileLocation, areas: CustomArea[]): CustomArea | null {
+  return areas.find((area) => pointInPolygon(tile.latitude, tile.longitude, area.polygon)) ?? null;
+}
 
 function TrackedTileList({
   entries,
@@ -87,6 +143,51 @@ function TrackedTileList({
         );
       })}
     </ul>
+  );
+}
+
+function TrackedTileAreaGroups({
+  groups,
+  unassigned,
+  selectedTileUuid,
+  onTileClick,
+  onOpenDetails,
+}: {
+  groups: AreaGroupedTileList[];
+  unassigned: TileListEntry[];
+  selectedTileUuid: string | null;
+  onTileClick: (tile: TileLocation) => void;
+  onOpenDetails: (tileUuid: string) => void;
+}) {
+  if (groups.length === 0 && unassigned.length === 0) {
+    return <p className="tile-list-empty">No tile positions received yet.</p>;
+  }
+
+  return (
+    <div className="tile-area-groups">
+      {groups.map((group) => (
+        <section key={group.area.area_id} className="tile-area-group">
+          <h3>{group.area.name}</h3>
+          <TrackedTileList
+            entries={group.entries}
+            selectedTileUuid={selectedTileUuid}
+            onTileClick={onTileClick}
+            onOpenDetails={onOpenDetails}
+          />
+        </section>
+      ))}
+      {unassigned.length > 0 ? (
+        <section className="tile-area-group">
+          <h3>Outside Named Areas</h3>
+          <TrackedTileList
+            entries={unassigned}
+            selectedTileUuid={selectedTileUuid}
+            onTileClick={onTileClick}
+            onOpenDetails={onOpenDetails}
+          />
+        </section>
+      ) : null}
+    </div>
   );
 }
 
@@ -182,137 +283,140 @@ function HistoryHeader({
   );
 }
 
-export function LiveTrackerView({ backendUrl, locations, onOpenDetails }: LiveTrackerViewProps) {
-  const state = useLiveTrackerState(backendUrl, locations);
-  const areaApiTileUuid = state.selectedTileUuid ?? locations[0]?.tile_uuid ?? "global";
-  const { createArea } = useCustomAreas({
-    baseUrl: backendUrl,
-    tileUuid: areaApiTileUuid,
-    onRefresh: () => {
-      // No explicit refresh action needed on the live map panel.
-    },
-  });
-
-  const handleDrawPolygon = useCallback(
-    async (points: AreaPolygonPoint[]) => {
-      if (points.length < 3) {
-        window.alert("A polygon needs at least 3 points.");
-        return;
-      }
-
-      const suggestedName = state.selectedTile ? `${state.selectedTile.label} Area` : "Custom Area";
-      const input = window.prompt("Name this area:", suggestedName);
-      const name = input?.trim();
-      if (!name) {
-        return;
-      }
-
-      try {
-        await createArea(name, points);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to create area.";
-        window.alert(message);
-      }
-    },
-    [createArea, state.selectedTile, state.selectedTileUuid],
-  );
-
+function CollapsibleAreaSorting({
+  groups,
+  onToggle,
+}: {
+  groups: AreaGroupedTileList[];
+  onToggle: (areaId: string) => void;
+}) {
   return (
-    <>
-      <section className="map-panel">
-        <div className="map-toolbar">
+    <div className="collapsible-area-sorting">
+      {groups.map((group) => (
+        <div key={group.area.area_id} className="area-group">
           <button
             type="button"
-            className="map-reset-button"
-            onClick={state.onResetMapView}
-            disabled={locations.length === 0}
+            className="area-group-toggle"
+            onClick={() => onToggle(group.area.area_id)}
           >
-            Reset View
+            {group.area.name} ({group.entries.length})
           </button>
         </div>
-        <LiveMap
-          locations={locations}
-          selectedTileUuid={state.selectedTileUuid}
-          onTileClick={state.onSelectTile}
-          onMapClick={state.onClearSelection}
-          onDrawPolygon={handleDrawPolygon}
-          breadcrumbs={state.displayedHistory}
-          breadcrumbColor={BREADCRUMB_COLOR}
-          tileColorByUuid={state.tileColorByUuid}
-          fitSignal={state.mapResetSignal}
-        />
-      </section>
-
-      <details className="tile-list-panel" open>
-        <summary>Tracked Tiles</summary>
-        <TrackedTileList
-          entries={state.sortedTiles}
-          selectedTileUuid={state.selectedTileUuid}
-          onTileClick={state.onSelectTile}
-          onOpenDetails={onOpenDetails}
-        />
-      </details>
-
-      <TileHistoryPanel
-        selectedTile={state.selectedTile}
-        history={state.history}
-        loading={state.loading}
-        breadcrumbLimit={state.breadcrumbLimit}
-        setBreadcrumbLimit={state.setBreadcrumbLimit}
-        currentTimeMs={state.currentTimeMs}
-      />
-    </>
+      ))}
+    </div>
   );
 }
 
-function useLiveTrackerState(backendUrl: string, locations: TileLocation[]): LiveTrackerState {
-  const [selectedTileUuid, setSelectedTileUuid] = useState<string | null>(null);
-  const [breadcrumbLimit, setBreadcrumbLimit] = useState(10);
-  const [mapResetSignal, setMapResetSignal] = useState(0);
-  const [currentTimeMs, setCurrentTimeMs] = useState(() => Date.now());
-  const selectedTile = locations.find((item) => item.tile_uuid === selectedTileUuid) ?? null;
-  const { history, loading } = useTileHistory(backendUrl, selectedTileUuid);
-  const ageBandConfig = useMemo(() => getAgeBandConfig(), []);
-  const sortedTiles = useMemo(
-    () => buildSortedTileEntries(locations, currentTimeMs, ageBandConfig),
-    [ageBandConfig, currentTimeMs, locations],
-  );
-  const tileColorByUuid = useMemo(() => buildTileColorMap(sortedTiles), [sortedTiles]);
-  const displayedHistory = history.slice(-breadcrumbLimit).reverse();
+export function LiveTrackerView({ backendUrl, locations, onOpenDetails }: LiveTrackerViewProps) {
+  const [tileListMode, setTileListMode] = useState<TileListMode>("all");
+  const [collapsedAreas, setCollapsedAreas] = useState<Record<string, boolean>>({});
+  const currentTimeMs = Date.now();
 
-  useEffect(() => {
-    if (selectedTileUuid && !selectedTile) {
-      setSelectedTileUuid(null);
-    }
-  }, [selectedTile, selectedTileUuid]);
-
-  useEffect(() => {
-    const ticker = setInterval(() => {
-      setCurrentTimeMs(Date.now());
-    }, 60_000);
-
-    return () => {
-      clearInterval(ticker);
-    };
-  }, []);
-
-  return {
-    selectedTileUuid,
-    selectedTile,
-    breadcrumbLimit,
-    currentTimeMs,
-    mapResetSignal,
-    history,
-    loading,
-    sortedTiles,
-    tileColorByUuid,
-    displayedHistory,
-    onSelectTile: (tile) => {
-      setSelectedTileUuid(tile.tile_uuid);
-      setBreadcrumbLimit(10);
-    },
-    onClearSelection: () => setSelectedTileUuid(null),
-    onResetMapView: () => setMapResetSignal((value) => value + 1),
-    setBreadcrumbLimit,
+  const toggleAreaCollapse = (areaId: string) => {
+    setCollapsedAreas((prev) => ({
+      ...prev,
+      [areaId]: !prev[areaId],
+    }));
   };
+
+  const { areas } = useCustomAreas({
+    baseUrl: backendUrl,
+    tileUuid: "global", // Placeholder UUID to fetch global areas
+    onRefresh: () => {},
+  });
+
+  // Build sorted tile entries for "All Tiles" tab
+  const sortedTiles = useMemo(
+    () => buildSortedTileEntries(locations, currentTimeMs, getAgeBandConfig()),
+    [locations, currentTimeMs]
+  );
+
+  // Build tile color map
+  const tileColorByUuid = useMemo(() => buildTileColorMap(sortedTiles), [sortedTiles]);
+
+  // Group tiles by area
+  const groupedTiles = useMemo(() => {
+    const groups: AreaGroupedTileList[] = areas.map((area) => {
+      const entriesInArea = sortedTiles.filter((entry) =>
+        pointInPolygon(entry.tile.latitude, entry.tile.longitude, area.polygon)
+      );
+      return {
+        area,
+        entries: entriesInArea,
+      };
+    });
+
+    // Find tiles that are in any area
+    const tilesInAreas = new Set(
+      groups.flatMap((g) => g.entries.map((e) => e.tile.tile_uuid))
+    );
+
+    // Tiles not in any area
+    const unassigned = sortedTiles.filter(
+      (entry) => !tilesInAreas.has(entry.tile.tile_uuid)
+    );
+
+    return { groups, unassigned };
+  }, [sortedTiles, areas]);
+
+  return (
+    <div className="live-tracker-view">
+      <LiveMap
+        locations={locations}
+        areas={areas}
+        selectedTileUuid={null}
+        onTileClick={() => {}}
+        onMapClick={() => {}}
+      />
+
+      <div className="tabs">
+        <button
+          className={tileListMode === "all" ? "is-active" : ""}
+          onClick={() => setTileListMode("all")}
+        >
+          All Tiles
+        </button>
+        <button
+          className={tileListMode === "areas" ? "is-active" : ""}
+          onClick={() => setTileListMode("areas")}
+        >
+          By Area
+        </button>
+        <button
+          className={tileListMode === "moving" ? "is-active" : ""}
+          onClick={() => setTileListMode("moving")}
+        >
+          Moving
+        </button>
+      </div>
+
+      {tileListMode === "all" && (
+        <TrackedTileList
+          entries={sortedTiles}
+          selectedTileUuid={null}
+          onTileClick={() => {}}
+          onOpenDetails={onOpenDetails}
+        />
+      )}
+
+      {tileListMode === "areas" && (
+        <TrackedTileAreaGroups
+          groups={groupedTiles.groups}
+          unassigned={groupedTiles.unassigned}
+          selectedTileUuid={null}
+          onTileClick={() => {}}
+          onOpenDetails={onOpenDetails}
+        />
+      )}
+
+      {tileListMode === "moving" && (
+        <TrackedTileList
+          entries={groupedTiles.unassigned}
+          selectedTileUuid={null}
+          onTileClick={() => {}}
+          onOpenDetails={onOpenDetails}
+        />
+      )}
+    </div>
+  );
 }

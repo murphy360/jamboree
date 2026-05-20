@@ -1,16 +1,17 @@
 import { useEffect, useRef } from "react";
 import type { Polygon as LeafletPolygon } from "leaflet";
-import { CircleMarker, FeatureGroup, MapContainer, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { CircleMarker, FeatureGroup, MapContainer, Polygon, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { ArcGISLayers } from "./ArcGISLayers";
 import { TileMarkers } from "./TileMarkers";
 import type { TileLocation } from "../hooks/useTileLocations";
-import type { AreaPolygonPoint } from "../hooks/useTileDetails";
+import type { AreaPolygonPoint, CustomArea } from "../hooks/useTileDetails";
 import { EditControl } from "react-leaflet-draw";
 import "leaflet-draw/dist/leaflet.draw.css";
 
 type LiveMapProps = {
   locations: TileLocation[];
+  areas?: CustomArea[];
   selectedTileUuid: string | null;
   onTileClick: (tile: TileLocation) => void;
   onMapClick: () => void;
@@ -144,6 +145,7 @@ function toPolygonPoints(layer: LeafletPolygon): AreaPolygonPoint[] {
 
 export function LiveMap({
   locations,
+  areas,
   selectedTileUuid,
   onTileClick,
   onMapClick,
@@ -166,6 +168,15 @@ export function LiveMap({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <ArcGISLayers showNSJRegions={true} />
+        {areas?.map((area) => (
+          <Polygon
+            key={area.area_id}
+            positions={area.polygon.map((point) => [point.latitude, point.longitude] as [number, number])}
+            pathOptions={{ color: "#0f766e", weight: 2, fillColor: "#14b8a6", fillOpacity: 0.12 }}
+          >
+            <Tooltip sticky>{area.name}</Tooltip>
+          </Polygon>
+        ))}
         <BreadcrumbOverlay breadcrumbs={breadcrumbs} color={breadcrumbColor} />
         <TileMarkers
           locations={locations}
