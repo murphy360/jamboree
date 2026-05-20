@@ -309,6 +309,30 @@ body {
   gap: 0.5rem;
 }
 
+.tile-details-filters {
+  margin-top: 0.7rem;
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.tile-details-filter {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.tile-details-filter select {
+  border: 1px solid #cbd5e1;
+  border-radius: 0.55rem;
+  background: #f8fafc;
+  color: #0f172a;
+  padding: 0.42rem 0.55rem;
+  font: inherit;
+}
+
 .tile-details-list-ranked {
   counter-reset: hotlist;
 }
