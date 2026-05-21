@@ -4,6 +4,7 @@ from src.core.settings import HealthResponse, TileStatusResponse, get_settings
 from src.services.models import (
     CreateAreaRequest,
     CustomArea,
+    LeaderboardResponse,
     TileDetailsResponse,
     TileHistoryResponse,
     UpdateAreaRequest,
@@ -139,3 +140,9 @@ async def delete_area(tile_uuid: str, area_id: str, request: Request) -> None:
     area_store = request.app.state.area_store
     if not area_store.delete_area(area_id):
         raise HTTPException(status_code=404, detail="Area not found")
+
+
+@router.get("/leaderboard", response_model=LeaderboardResponse)
+async def leaderboard(request: Request, date: str | None = Query(default=None)) -> LeaderboardResponse:
+    leaderboard_store = request.app.state.leaderboard_store
+    return leaderboard_store.get_leaderboard(date=date)

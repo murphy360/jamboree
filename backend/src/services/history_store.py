@@ -352,6 +352,25 @@ class TileHistoryStore:
 
         return best_cluster
 
+    def get_all_tile_identifiers(self) -> list[tuple[str, str]]:
+        """Return (tile_uuid, label) for all tiles that have history, using the latest label."""
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT h.tile_uuid, h.label
+                FROM tile_history h
+                WHERE h.rowid = (
+                    SELECT x.rowid
+                    FROM tile_history x
+                    WHERE x.tile_uuid = h.tile_uuid
+                    ORDER BY x.observed_at DESC, x.rowid DESC
+                    LIMIT 1
+                )
+                ORDER BY h.label ASC
+                """
+            ).fetchall()
+        return [(row["tile_uuid"], row["label"]) for row in rows]
+
     def close(self) -> None:
         with self._lock:
             self._connection.close()

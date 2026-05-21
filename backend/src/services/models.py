@@ -78,6 +78,19 @@ class CreateAreaRequest(BaseModel):
     cluster_centers: list[AreaPolygonPoint]
     hotspot_centers: list[AreaPolygonPoint] = []
     merge_into_area_id: str | None = None
+
+
+class LeaderboardEntry(BaseModel):
+    rank: int
+    tile_uuid: str
+    label: str
+    value: float
+
+
+class LeaderboardResponse(BaseModel):
+    date: str | None
+    distance: list[LeaderboardEntry]
+    camp_time: list[LeaderboardEntry]
     merge_source_area_ids: list[str] = []
 
 

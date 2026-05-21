@@ -520,6 +520,36 @@ body {
 .tile-area-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
 .tile-area-cancel { padding: 0.28rem 0.7rem; background: white; border: 1px solid #94a3b8; border-radius: 4px; cursor: pointer; font-size: 0.875rem; }
 
+/* ── App Nav ──────────────────────────────────────── */
+.app-nav { margin-top: 0.75rem; display: flex; gap: 0.5rem; }
+.app-nav-btn { padding: 0.35rem 0.9rem; background: white; border: 1px solid #cbd5e1; border-radius: 0.4rem; cursor: pointer; font-size: 0.875rem; font-weight: 500; }
+.app-nav-btn.is-active { background: #0f766e; color: white; border-color: #0f766e; }
+
+/* ── Leaderboard ──────────────────────────────────── */
+.leaderboard-panel { background: white; border: 1px solid #cbd5e1; border-radius: 0.75rem; padding: 1.25rem; max-width: 700px; margin: 0 auto; }
+.leaderboard-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+.leaderboard-header h2 { margin: 0; font-size: 1.2rem; }
+.leaderboard-refresh-btn { padding: 0.3rem 0.75rem; background: white; border: 1px solid #94a3b8; border-radius: 0.4rem; cursor: pointer; font-size: 0.8rem; }
+.leaderboard-controls { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.leaderboard-mode-toggle { display: flex; gap: 0; }
+.leaderboard-mode-btn { padding: 0.3rem 0.75rem; background: white; border: 1px solid #cbd5e1; cursor: pointer; font-size: 0.85rem; }
+.leaderboard-mode-btn:first-child { border-radius: 0.4rem 0 0 0.4rem; }
+.leaderboard-mode-btn:last-child { border-radius: 0 0.4rem 0.4rem 0; }
+.leaderboard-mode-btn.is-active { background: #0f766e; color: white; border-color: #0f766e; }
+.leaderboard-date-input { padding: 0.3rem 0.5rem; border: 1px solid #cbd5e1; border-radius: 0.4rem; font-size: 0.85rem; }
+.leaderboard-tabs { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 2px solid #e2e8f0; }
+.leaderboard-tab { padding: 0.4rem 1rem; background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -2px; cursor: pointer; font-size: 0.9rem; color: #64748b; }
+.leaderboard-tab.is-active { border-bottom-color: #0f766e; color: #0f766e; font-weight: 600; }
+.leaderboard-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.leaderboard-table th { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 2px solid #e2e8f0; color: #475569; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.leaderboard-table td { padding: 0.45rem 0.6rem; border-bottom: 1px solid #f1f5f9; }
+.leaderboard-table tr:hover td { background: #f8fafc; }
+.leaderboard-rank { font-weight: 700; color: #0f766e; width: 2rem; }
+.leaderboard-value { font-weight: 600; text-align: right; }
+.leaderboard-empty { color: #94a3b8; font-size: 0.9rem; text-align: center; padding: 1.5rem 0; }
+.leaderboard-status { color: #64748b; font-size: 0.9rem; text-align: center; padding: 1rem 0; }
+.leaderboard-error { color: #dc2626; }
+
 /* ── Live Tracker View Layout ─────────────────────── */
 .live-tracker-view {
   display: flex;
