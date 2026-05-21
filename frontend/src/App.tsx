@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
 import { LiveTrackerView } from "./components/LiveTrackerView";
-import { LeaderboardPanel } from "./components/LeaderboardPanel";
 import { useSystemStatus } from "./hooks/useSystemStatus";
 import { useTileDetails } from "./hooks/useTileDetails";
 import { useTileLocations } from "./hooks/useTileLocations";
@@ -15,7 +14,6 @@ export function App() {
   const { backendConnected, homeAssistantConnected, tileCount } = useSystemStatus(BACKEND_URL);
   const [detailsTileUuid, setDetailsTileUuid] = useState<string | null>(null);
   const [detailsRefreshKey, setDetailsRefreshKey] = useState(0);
-  const [showLeaderboard, setShowLeaderboard] = useState(false);
   const { details, loading: detailsLoading } = useTileDetails(BACKEND_URL, detailsTileUuid, detailsRefreshKey);
   const handleRefreshDetails = useCallback(() => setDetailsRefreshKey((k) => k + 1), []);
 
@@ -43,20 +41,9 @@ export function App() {
         <p>
           Active Tiles: <strong>{tileCount || locations.length}</strong>
         </p>
-        <nav className="app-nav">
-          <button
-            type="button"
-            className={showLeaderboard ? "app-nav-btn is-active" : "app-nav-btn"}
-            onClick={() => { setShowLeaderboard((v) => !v); setDetailsTileUuid(null); }}
-          >
-            Leaderboard
-          </button>
-        </nav>
       </header>
 
-      {showLeaderboard ? (
-        <LeaderboardPanel backendUrl={BACKEND_URL} />
-      ) : detailsTileUuid ? (
+      {detailsTileUuid ? (
         <TileDetailsPage
           details={details}
           loading={detailsLoading}

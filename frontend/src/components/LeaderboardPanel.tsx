@@ -5,8 +5,6 @@ type LeaderboardPanelProps = {
   backendUrl: string;
 };
 
-type MetricTab = "distance" | "camp_time";
-
 function formatDistance(meters: number): string {
   if (meters >= 1000) return `${(meters / 1000).toFixed(2)} km`;
   return `${Math.round(meters)} m`;
@@ -24,7 +22,7 @@ function LeaderboardTable({
   metric,
 }: {
   entries: LeaderboardEntry[];
-  metric: MetricTab;
+  metric: "distance" | "camp_time" | "patch_trading_time";
 }) {
   if (entries.length === 0) {
     return <p className="leaderboard-empty">No data yet.</p>;
@@ -36,7 +34,13 @@ function LeaderboardTable({
         <tr>
           <th>#</th>
           <th>Name</th>
-          <th>{metric === "distance" ? "Distance" : "Time in Camp"}</th>
+          <th>
+            {metric === "distance"
+              ? "Distance"
+              : metric === "camp_time"
+                ? "Time in Camp"
+                : "Time in Patch Trading"}
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -60,12 +64,9 @@ export function LeaderboardPanel({ backendUrl }: LeaderboardPanelProps) {
   const today = new Date().toISOString().slice(0, 10);
   const [dateMode, setDateMode] = useState<"daily" | "overall">("daily");
   const [selectedDate, setSelectedDate] = useState<string>(today);
-  const [activeTab, setActiveTab] = useState<MetricTab>("distance");
 
   const queryDate = dateMode === "daily" ? selectedDate : null;
   const { data, loading, error, refresh } = useLeaderboard(backendUrl, queryDate);
-
-  const entries = data ? (activeTab === "distance" ? data.distance : data.camp_time) : [];
 
   return (
     <div className="leaderboard-panel">
@@ -105,26 +106,26 @@ export function LeaderboardPanel({ backendUrl }: LeaderboardPanelProps) {
         )}
       </div>
 
-      <div className="leaderboard-tabs">
-        <button
-          type="button"
-          className={activeTab === "distance" ? "leaderboard-tab is-active" : "leaderboard-tab"}
-          onClick={() => setActiveTab("distance")}
-        >
-          Most Distance
-        </button>
-        <button
-          type="button"
-          className={activeTab === "camp_time" ? "leaderboard-tab is-active" : "leaderboard-tab"}
-          onClick={() => setActiveTab("camp_time")}
-        >
-          Most Time in Camp
-        </button>
-      </div>
-
       {loading && <p className="leaderboard-status">Loading...</p>}
       {error && <p className="leaderboard-status leaderboard-error">Error: {error}</p>}
-      {!loading && !error && <LeaderboardTable entries={entries} metric={activeTab} />}
+      {!loading && !error && (
+        <div className="leaderboard-sections">
+          <section className="leaderboard-section">
+            <h3>Most Distance</h3>
+            <LeaderboardTable entries={data?.distance ?? []} metric="distance" />
+          </section>
+
+          <section className="leaderboard-section">
+            <h3>Most Time in Camp</h3>
+            <LeaderboardTable entries={data?.camp_time ?? []} metric="camp_time" />
+          </section>
+
+          <section className="leaderboard-section">
+            <h3>Most Time in Patch Trading</h3>
+            <LeaderboardTable entries={data?.patch_trading_time ?? []} metric="patch_trading_time" />
+          </section>
+        </div>
+      )}
     </div>
   );
 }

@@ -51,6 +51,7 @@ The app includes Daily and Overall leaderboard views for two metrics:
 
 - Most distance traveled.
 - Most time spent in custom areas with `camp` in the area name.
+- Most time spent in custom areas named for patch trading (for example, `Patch Trading`).
 
 API endpoint:
 

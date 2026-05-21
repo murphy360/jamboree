@@ -11,6 +11,7 @@ export interface LeaderboardData {
   date: string | null;
   distance: LeaderboardEntry[];
   camp_time: LeaderboardEntry[];
+  patch_trading_time: LeaderboardEntry[];
 }
 
 export function useLeaderboard(backendUrl: string, date: string | null) {

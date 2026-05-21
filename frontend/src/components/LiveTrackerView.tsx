@@ -12,6 +12,7 @@ import {
   type TileListEntry,
 } from "../utils/tileAge";
 import { LiveMap } from "./LiveMap";
+import { LeaderboardPanel } from "./LeaderboardPanel";
 
 type LiveTrackerViewProps = {
   backendUrl: string;
@@ -19,7 +20,7 @@ type LiveTrackerViewProps = {
   onOpenDetails: (tileUuid: string) => void;
 };
 
-type TileListMode = "all" | "areas" | "moving";
+type TileListMode = "all" | "areas" | "moving" | "leaderboard";
 
 type AreaGroupedTileList = {
   area: CustomArea;
@@ -388,6 +389,12 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails }: LiveTr
         >
           Moving
         </button>
+        <button
+          className={tileListMode === "leaderboard" ? "is-active" : ""}
+          onClick={() => setTileListMode("leaderboard")}
+        >
+          Leaderboard
+        </button>
       </div>
 
       {tileListMode === "all" && (
@@ -417,6 +424,8 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails }: LiveTr
           onOpenDetails={onOpenDetails}
         />
       )}
+
+      {tileListMode === "leaderboard" && <LeaderboardPanel backendUrl={backendUrl} />}
     </div>
   );
 }

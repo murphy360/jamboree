@@ -91,7 +91,7 @@ class LeaderboardResponse(BaseModel):
     date: str | None
     distance: list[LeaderboardEntry]
     camp_time: list[LeaderboardEntry]
-    merge_source_area_ids: list[str] = []
+    patch_trading_time: list[LeaderboardEntry]
 
 
 class UpdateAreaRequest(BaseModel):
