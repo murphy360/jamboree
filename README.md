@@ -43,7 +43,26 @@ docker compose up --build
 3. Open the apps:
 
 - Frontend: http://localhost:5173
-- Backend health: http://localhost:18000/health (or your `BACKEND_HOST_PORT` value)
+- Backend health: http://localhost:8086/health
+
+## Leaderboard
+
+The app includes Daily and Overall leaderboard views for two metrics:
+
+- Most distance traveled.
+- Most time spent in custom areas with `camp` in the area name.
+
+API endpoint:
+
+- `GET /leaderboard` for overall rankings.
+- `GET /leaderboard?date=YYYY-MM-DD` for a daily leaderboard.
+
+Examples:
+
+```bash
+curl http://localhost:8086/leaderboard
+curl "http://localhost:8086/leaderboard?date=2026-05-21"
+```
 
 ## Linting Rules
 
@@ -69,6 +88,7 @@ docker compose exec frontend npm run lint
 - FastAPI health endpoint implemented.
 - Home Assistant tracker client and polling worker scaffolded.
 - WebSocket endpoint (`/ws/locations`) implemented.
-- React map UI scaffolded with live WebSocket updates.
-
-ArcGIS base map overlay integration is the next major implementation step.
+- React map UI with live WebSocket updates implemented.
+- ArcGIS layers integrated into the frontend map.
+- Tile details page includes history, dwell clusters, and custom area management.
+- Leaderboard UI supports Daily and Overall rankings for distance and time-in-camp.
