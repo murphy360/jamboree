@@ -157,6 +157,7 @@ export function LiveMap({
 }: LiveMapProps) {
   const selected = findSelectedTile(locations, selectedTileUuid);
   const selectedMarkerColor = getSelectedMarkerColor(selected, tileColorByUuid);
+  const canDrawPolygons = Boolean(onDrawPolygon);
 
   return (
     <section className="map-frame">
@@ -185,27 +186,29 @@ export function LiveMap({
           tileColorByUuid={tileColorByUuid}
         />
         <SelectedTileHighlight selected={selected} color={selectedMarkerColor} />
-        <FeatureGroup>
-          <EditControl
-            position="topright"
-            onCreated={(e) => {
-              const layer = e.layer;
-              if (!("getLatLngs" in layer)) {
-                return;
-              }
-              const polygonPoints = toPolygonPoints(layer as LeafletPolygon);
-              layer.remove();
-              void onDrawPolygon?.(polygonPoints);
-            }}
-            draw={{
-              rectangle: false,
-              circle: false,
-              marker: false,
-              polyline: false,
-              circlemarker: false,
-            }}
-          />
-        </FeatureGroup>
+        {canDrawPolygons ? (
+          <FeatureGroup>
+            <EditControl
+              position="topright"
+              onCreated={(e) => {
+                const layer = e.layer;
+                if (!("getLatLngs" in layer)) {
+                  return;
+                }
+                const polygonPoints = toPolygonPoints(layer as LeafletPolygon);
+                layer.remove();
+                void onDrawPolygon?.(polygonPoints);
+              }}
+              draw={{
+                rectangle: false,
+                circle: false,
+                marker: false,
+                polyline: false,
+                circlemarker: false,
+              }}
+            />
+          </FeatureGroup>
+        ) : null}
       </MapContainer>
     </section>
   );

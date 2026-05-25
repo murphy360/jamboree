@@ -320,11 +320,29 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails }: LiveTr
     }));
   };
 
-  const { areas } = useCustomAreas({
+  const { areas, createArea } = useCustomAreas({
     baseUrl: backendUrl,
     tileUuid: "global", // Placeholder UUID to fetch global areas
     onRefresh: () => {},
   });
+
+  const handleDrawPolygon = useCallback(
+    async (points: AreaPolygonPoint[]) => {
+      const requestedName = window.prompt("Name this area");
+      const name = requestedName?.trim();
+      if (!name) {
+        return;
+      }
+
+      try {
+        await createArea(name, points);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to create area.";
+        window.alert(message);
+      }
+    },
+    [createArea],
+  );
 
   // Build sorted tile entries for "All Tiles" tab
   const sortedTiles = useMemo(
@@ -368,6 +386,7 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails }: LiveTr
         selectedTileUuid={null}
         onTileClick={() => {}}
         onMapClick={() => {}}
+        onDrawPolygon={handleDrawPolygon}
       />
 
       <div className="tabs">

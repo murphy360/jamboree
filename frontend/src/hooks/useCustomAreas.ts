@@ -19,28 +19,35 @@ export function useCustomAreas({ baseUrl, tileUuid, onRefresh }: UseCustomAreasO
 
   const [areas, setAreas] = useState<CustomArea[]>([]);
 
+  const fetchAreas = useCallback(async () => {
+    if (!tileUuid || !normalizedBaseUrl) {
+      setAreas([]);
+      return;
+    }
+
+    const response = await fetch(`${normalizedBaseUrl}/tiles/${encodeURIComponent(tileUuid)}/areas`);
+    if (!response.ok) {
+      return;
+    }
+
+    const data = await response.json();
+    // Backend returns a list directly, not an object with areas property.
+    setAreas(Array.isArray(data) ? data : data.areas || []);
+  }, [normalizedBaseUrl, tileUuid]);
+
   useEffect(() => {
-    const fetchAreas = async () => {
-      if (!tileUuid || !baseUrl) return;
-      const response = await fetch(`${baseUrl}/tiles/${encodeURIComponent(tileUuid)}/areas`);
-      if (response.ok) {
-        const data = await response.json();
-        // Backend returns a list directly, not an object with areas property
-        setAreas(Array.isArray(data) ? data : data.areas || []);
-      }
-    };
-    fetchAreas();
-  }, [baseUrl, tileUuid]);
+    void fetchAreas();
+  }, [fetchAreas]);
 
   const createArea = useCallback(
     async (name: string, clusterCenters: AreaPolygonPoint[], options?: CreateAreaOptions): Promise<void> => {
-      if (!tileUuid || !baseUrl) {
+      if (!tileUuid || !normalizedBaseUrl) {
         return;
       }
       const mergeSourceAreaIds = options?.mergeSourceAreaIds ?? [];
       const hotspotCenters = options?.hotspotCenters ?? [];
       const response = await fetch(
-        `${baseUrl}/tiles/${encodeURIComponent(tileUuid)}/areas`,
+        `${normalizedBaseUrl}/tiles/${encodeURIComponent(tileUuid)}/areas`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -57,18 +64,19 @@ export function useCustomAreas({ baseUrl, tileUuid, onRefresh }: UseCustomAreasO
         const detail = (await response.json().catch(() => ({}))) as { detail?: string };
         throw new Error(detail.detail ?? `Create area failed (${response.status})`);
       }
+      await fetchAreas();
       onRefresh();
     },
-    [baseUrl, tileUuid, onRefresh],
+    [normalizedBaseUrl, tileUuid, onRefresh, fetchAreas],
   );
 
   const renameArea = useCallback(
     async (areaId: string, name: string): Promise<void> => {
-      if (!tileUuid || !baseUrl) {
+      if (!tileUuid || !normalizedBaseUrl) {
         return;
       }
       const response = await fetch(
-        `${baseUrl}/tiles/${encodeURIComponent(tileUuid)}/areas/${encodeURIComponent(areaId)}`,
+        `${normalizedBaseUrl}/tiles/${encodeURIComponent(tileUuid)}/areas/${encodeURIComponent(areaId)}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -78,26 +86,28 @@ export function useCustomAreas({ baseUrl, tileUuid, onRefresh }: UseCustomAreasO
       if (!response.ok) {
         throw new Error(`Rename failed (${response.status})`);
       }
+      await fetchAreas();
       onRefresh();
     },
-    [baseUrl, tileUuid, onRefresh],
+    [normalizedBaseUrl, tileUuid, onRefresh, fetchAreas],
   );
 
   const deleteArea = useCallback(
     async (areaId: string): Promise<void> => {
-      if (!tileUuid || !baseUrl) {
+      if (!tileUuid || !normalizedBaseUrl) {
         return;
       }
       const response = await fetch(
-        `${baseUrl}/tiles/${encodeURIComponent(tileUuid)}/areas/${encodeURIComponent(areaId)}`,
+        `${normalizedBaseUrl}/tiles/${encodeURIComponent(tileUuid)}/areas/${encodeURIComponent(areaId)}`,
         { method: "DELETE" },
       );
       if (!response.ok && response.status !== 404) {
         throw new Error(`Delete failed (${response.status})`);
       }
+      await fetchAreas();
       onRefresh();
     },
-    [baseUrl, tileUuid, onRefresh],
+    [normalizedBaseUrl, tileUuid, onRefresh, fetchAreas],
   );
 
   return { areas, createArea, renameArea, deleteArea };
