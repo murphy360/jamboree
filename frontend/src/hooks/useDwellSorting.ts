@@ -244,7 +244,7 @@ export function useDwellSorting(details: TileDetails, areaPolygons: AreaPolygonP
       const firstEvent = events[0];
       const totalMinutes = events.reduce((sum, e) => sum + e.minutesSpent, 0);
       const totalSamples = events.reduce((sum, e) => sum + e.samples, 0);
-      const totalVisits = events.reduce((sum, e) => sum + e.visitCount, 0);
+      const totalVisits = events.length;
 
       return {
         ...firstEvent,
