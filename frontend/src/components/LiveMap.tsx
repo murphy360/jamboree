@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useRef } from "react";
 import type { Polygon as LeafletPolygon } from "leaflet";
 import { CircleMarker, FeatureGroup, MapContainer, Polygon, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import { Breadcrumbs } from "./Breadcrumbs";
@@ -143,6 +143,50 @@ function toPolygonPoints(layer: LeafletPolygon): AreaPolygonPoint[] {
   return points;
 }
 
+type PolygonDrawControlProps = {
+  onDrawPolygon: (points: AreaPolygonPoint[]) => void | Promise<void>;
+};
+
+const PolygonDrawControl = memo(function PolygonDrawControl({ onDrawPolygon }: PolygonDrawControlProps) {
+  const onDrawPolygonRef = useRef(onDrawPolygon);
+
+  useEffect(() => {
+    onDrawPolygonRef.current = onDrawPolygon;
+  }, [onDrawPolygon]);
+
+  const handleCreated = useCallback((event: { layer: unknown }) => {
+    const layer = event.layer;
+    if (!layer || typeof layer !== "object" || !("getLatLngs" in layer) || !("remove" in layer)) {
+      return;
+    }
+
+    const polygonLayer = layer as LeafletPolygon;
+    const polygonPoints = toPolygonPoints(polygonLayer);
+    polygonLayer.remove();
+    void onDrawPolygonRef.current(polygonPoints);
+  }, []);
+
+  return (
+    <FeatureGroup>
+      <EditControl
+        position="topright"
+        onCreated={handleCreated}
+        draw={{
+          rectangle: false,
+          circle: false,
+          marker: false,
+          polyline: false,
+          circlemarker: false,
+        }}
+        edit={{
+          edit: false,
+          remove: false,
+        }}
+      />
+    </FeatureGroup>
+  );
+});
+
 export function LiveMap({
   locations,
   areas,
@@ -186,29 +230,7 @@ export function LiveMap({
           tileColorByUuid={tileColorByUuid}
         />
         <SelectedTileHighlight selected={selected} color={selectedMarkerColor} />
-        {canDrawPolygons ? (
-          <FeatureGroup>
-            <EditControl
-              position="topright"
-              onCreated={(e) => {
-                const layer = e.layer;
-                if (!("getLatLngs" in layer)) {
-                  return;
-                }
-                const polygonPoints = toPolygonPoints(layer as LeafletPolygon);
-                layer.remove();
-                void onDrawPolygon?.(polygonPoints);
-              }}
-              draw={{
-                rectangle: false,
-                circle: false,
-                marker: false,
-                polyline: false,
-                circlemarker: false,
-              }}
-            />
-          </FeatureGroup>
-        ) : null}
+        {canDrawPolygons && onDrawPolygon ? <PolygonDrawControl onDrawPolygon={onDrawPolygon} /> : null}
       </MapContainer>
     </section>
   );
