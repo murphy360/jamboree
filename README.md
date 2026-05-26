@@ -13,7 +13,7 @@ Docker-first tracking platform for National Jamboree operations. The project sta
 Copy-Item backend/.env.example backend/.env
 ```
 
-Optional (if `8000` is already used on your machine), create root compose overrides:
+Optional (if `5173` is already used on your machine), create a root `.env` for Docker Compose:
 
 ```bash
 Copy-Item .env.example .env
@@ -42,7 +42,7 @@ docker compose up --build
 
 3. Open the apps:
 
-- Frontend: http://localhost:5173
+- Frontend: http://localhost:${FRONTEND_PORT} (default `5173`)
 - Backend health: http://localhost:8086/health
 
 ## Leaderboard
