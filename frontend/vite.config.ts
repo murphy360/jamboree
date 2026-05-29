@@ -6,5 +6,6 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    allowedHosts: ["dontpanic.tplinkdns.com", "dontpanicitsjamboree.ddns.net"],
   },
 });
