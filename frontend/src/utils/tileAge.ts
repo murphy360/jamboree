@@ -42,7 +42,17 @@ export function getAgeBandConfig(): AgeBandConfig {
 }
 
 export function getTileTimestamp(tile: TileLocation): string | null | undefined {
-  return tile.tile_service_observed_at ?? tile.observed_at ?? tile.polled_at;
+  if (tile.tile_service_observed_at) {
+    return tile.tile_service_observed_at;
+  }
+
+  // Home Assistant sourced records always include polled_at. If there is no
+  // Tile-provided timestamp, treat age as unknown instead of "fresh now".
+  if (tile.polled_at) {
+    return null;
+  }
+
+  return tile.observed_at ?? tile.polled_at;
 }
 
 function getTileAgeMs(value: string | null | undefined, referenceTimeMs: number): number {

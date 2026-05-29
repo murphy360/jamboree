@@ -257,7 +257,7 @@ class HomeAssistantTileClient:
 
         updated = state.get("last_updated") or state.get("last_changed")
         state_updated_at = HomeAssistantTileClient._parse_datetime(updated)
-        tile_service_observed_at = self._extract_tile_service_timestamp(attrs) or state_updated_at
+        tile_service_observed_at = self._extract_tile_service_timestamp(attrs)
         observed_at = tile_service_observed_at or state_updated_at or datetime.now(UTC)
         polled_at = datetime.now(UTC)
 
