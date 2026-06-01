@@ -25,6 +25,11 @@ export function App() {
     setDetailsTileUuid(null);
   };
 
+  const handleTrackerRemoved = useCallback(() => {
+    setDetailsTileUuid(null);
+    setDetailsRefreshKey((k) => k + 1);
+  }, []);
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -48,6 +53,7 @@ export function App() {
           details={details}
           loading={detailsLoading}
           onBack={handleCloseDetails}
+          onTrackerRemoved={handleTrackerRemoved}
           baseUrl={BACKEND_URL}
           tileUuid={detailsTileUuid}
           onRefreshDetails={handleRefreshDetails}

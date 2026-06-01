@@ -3,8 +3,9 @@ from datetime import UTC, datetime
 from fastapi.testclient import TestClient
 
 from src.main import app
+from src.services.area_store import AreaStore
 from src.services.history_store import TileHistoryStore
-from src.services.models import TileLocation
+from src.services.models import AreaPolygonPoint, TileLocation
 
 
 def build_history_store(tmp_path, name: str) -> TileHistoryStore:
@@ -252,6 +253,58 @@ def test_record_keeps_only_first_and_last_stationary_breadcrumb(tmp_path) -> Non
     assert history[0].observed_at.isoformat() == "2026-05-19T15:00:00+00:00"
     assert history[1].observed_at.isoformat() == "2026-05-19T15:10:00+00:00"
 
+
+
+def test_delete_tile_endpoint_removes_history_and_custom_areas(tmp_path) -> None:
+    original_history_store = getattr(app.state, "history_store", None)
+    original_area_store = getattr(app.state, "area_store", None)
+
+    db_path = tmp_path / "delete-tile.db"
+    history_store = TileHistoryStore(db_path=str(db_path))
+    area_store = AreaStore(db_path=str(db_path))
+
+    tile_uuid = "device_tracker.tile_delete"
+    history_store.record(
+        [
+            TileLocation(
+                tile_uuid=tile_uuid,
+                latitude=38.1,
+                longitude=-81.2,
+                observed_at=datetime(2026, 5, 21, 12, 0, tzinfo=UTC),
+                label="Tile Delete",
+            ),
+            TileLocation(
+                tile_uuid=tile_uuid,
+                latitude=38.2,
+                longitude=-81.3,
+                observed_at=datetime(2026, 5, 21, 12, 5, tzinfo=UTC),
+                label="Tile Delete",
+            ),
+        ]
+    )
+    area_store.create_area(
+        tile_uuid,
+        "Delete Me",
+        [
+            AreaPolygonPoint(latitude=38.1000, longitude=-81.2000),
+            AreaPolygonPoint(latitude=38.1010, longitude=-81.2000),
+            AreaPolygonPoint(latitude=38.1005, longitude=-81.1990),
+        ],
+    )
+
+    app.state.history_store = history_store
+    app.state.area_store = area_store
+
+    try:
+        client = TestClient(app)
+        response = client.delete(f"/tiles/{tile_uuid}")
+
+        assert response.status_code == 204
+        assert history_store.get_history(tile_uuid) == []
+        assert area_store.get_areas(tile_uuid) == []
+    finally:
+        app.state.history_store = original_history_store
+        app.state.area_store = original_area_store
 
 def test_record_keeps_departure_point_before_location_changes(tmp_path) -> None:
     history_store = build_history_store(tmp_path, "departure.db")

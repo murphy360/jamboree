@@ -311,6 +311,15 @@ class AreaStore:
             self._connection.commit()
         return cursor.rowcount > 0
 
+    def delete_areas_for_tile(self, tile_uuid: str) -> int:
+        with self._lock:
+            cursor = self._connection.execute(
+                "DELETE FROM custom_areas WHERE tile_uuid = ?",
+                (tile_uuid,),
+            )
+            self._connection.commit()
+        return cursor.rowcount
+
     # ------------------------------------------------------------------
     # Stats computation
     # ------------------------------------------------------------------

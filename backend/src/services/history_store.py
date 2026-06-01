@@ -371,6 +371,16 @@ class TileHistoryStore:
             ).fetchall()
         return [(row["tile_uuid"], row["label"]) for row in rows]
 
+    def delete_tile_history(self, tile_uuid: str) -> int:
+        """Delete all stored history rows for a tile and return deleted row count."""
+        with self._lock:
+            cursor = self._connection.execute(
+                "DELETE FROM tile_history WHERE tile_uuid = ?",
+                (tile_uuid,),
+            )
+            self._connection.commit()
+        return cursor.rowcount
+
     def close(self) -> None:
         with self._lock:
             self._connection.close()

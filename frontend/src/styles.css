@@ -287,6 +287,13 @@ body {
   align-items: flex-start;
 }
 
+.tile-details-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .tile-details-header h2 {
   margin: 0.2rem 0 0.3rem;
 }
@@ -300,6 +307,29 @@ body {
   font-weight: 700;
   padding: 0.45rem 0.75rem;
   cursor: pointer;
+}
+
+.tile-details-remove {
+  border: 1px solid #fca5a5;
+  border-radius: 0.6rem;
+  background: linear-gradient(180deg, #ffffff 0%, #fee2e2 100%);
+  color: #991b1b;
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 0.45rem 0.75rem;
+  cursor: pointer;
+}
+
+.tile-details-remove:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.tile-details-error {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
 .tile-details-stats {

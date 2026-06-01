@@ -142,6 +142,17 @@ async def delete_area(tile_uuid: str, area_id: str, request: Request) -> None:
         raise HTTPException(status_code=404, detail="Area not found")
 
 
+@router.delete("/tiles/{tile_uuid}", status_code=204)
+async def delete_tile(tile_uuid: str, request: Request) -> None:
+    history_store = request.app.state.history_store
+    area_store = request.app.state.area_store
+
+    deleted_history_rows = history_store.delete_tile_history(tile_uuid)
+    area_store.delete_areas_for_tile(tile_uuid)
+    if deleted_history_rows == 0:
+        raise HTTPException(status_code=404, detail="Tile history not found")
+
+
 @router.get("/leaderboard", response_model=LeaderboardResponse)
 async def leaderboard(request: Request, date: str | None = Query(default=None)) -> LeaderboardResponse:
     leaderboard_store = request.app.state.leaderboard_store

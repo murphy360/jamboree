@@ -32,6 +32,9 @@ Set these values in `backend/.env`:
 Tile details endpoint supports runtime override for hotspot merge distance:
 - `GET /tiles/{tile_uuid}/details?dwell_merge_meters=50`
 
+Remove a tracker and all locally stored history/custom areas:
+- `DELETE /tiles/{tile_uuid}`
+
 If `HOME_ASSISTANT_TILE_ENTITIES` is empty, backend auto-discovers Tile trackers by scanning `device_tracker.*` entities that include `tile` in entity id or friendly name.
 
 2. Start the stack:
@@ -92,4 +95,5 @@ docker compose exec frontend npm run lint
 - React map UI with live WebSocket updates implemented.
 - ArcGIS layers integrated into the frontend map.
 - Tile details page includes history, dwell clusters, and custom area management.
+- Tile details page includes a Remove tracker action that clears local history and custom areas for that tracker.
 - Leaderboard UI supports Daily and Overall rankings for distance and time-in-camp.

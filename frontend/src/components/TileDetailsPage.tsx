@@ -9,6 +9,7 @@ type TileDetailsPageProps = {
   details: TileDetails | null;
   loading: boolean;
   onBack: () => void;
+  onTrackerRemoved: () => void;
   baseUrl: string;
   tileUuid: string;
   onRefreshDetails: () => void;
@@ -21,6 +22,7 @@ type DailyBreakdownProps = {
 type DetailsContentProps = {
   details: TileDetails;
   onBack: () => void;
+  onTrackerRemoved: () => void;
   baseUrl: string;
   tileUuid: string;
   onRefreshDetails: () => void;
@@ -54,7 +56,7 @@ function formatMinutes(value: number): string {
   return `${hours} hr ${minutes} min`;
 }
 
-export function TileDetailsPage({ details, loading, onBack, baseUrl, tileUuid, onRefreshDetails }: TileDetailsPageProps) {
+export function TileDetailsPage({ details, loading, onBack, onTrackerRemoved, baseUrl, tileUuid, onRefreshDetails }: TileDetailsPageProps) {
   if (loading) {
     return (
       <section className="tile-details-panel">
@@ -77,7 +79,16 @@ export function TileDetailsPage({ details, loading, onBack, baseUrl, tileUuid, o
     );
   }
 
-  return <DetailsContent details={details} onBack={onBack} baseUrl={baseUrl} tileUuid={tileUuid} onRefreshDetails={onRefreshDetails} />;
+  return (
+    <DetailsContent
+      details={details}
+      onBack={onBack}
+      onTrackerRemoved={onTrackerRemoved}
+      baseUrl={baseUrl}
+      tileUuid={tileUuid}
+      onRefreshDetails={onRefreshDetails}
+    />
+  );
 }
 
 function DailyBreakdown({ details }: DailyBreakdownProps) {
@@ -99,8 +110,10 @@ function DailyBreakdown({ details }: DailyBreakdownProps) {
 }
 
 
-function DetailsContent({ details, onBack, baseUrl, tileUuid, onRefreshDetails }: DetailsContentProps) {
+function DetailsContent({ details, onBack, onTrackerRemoved, baseUrl, tileUuid, onRefreshDetails }: DetailsContentProps) {
   const [selectedHotspot, setSelectedHotspot] = useState<SelectedHotspot | null>(null);
+  const [deletePending, setDeletePending] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const { createArea, renameArea, deleteArea } = useCustomAreas({
     baseUrl,
     tileUuid,
@@ -112,6 +125,34 @@ function DetailsContent({ details, onBack, baseUrl, tileUuid, onRefreshDetails }
     [createArea],
   );
 
+  const handleDeleteTracker = useCallback(async () => {
+    const confirmed = window.confirm(
+      `Remove tracker \"${details.label}\" and all saved history? This cannot be undone.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletePending(true);
+    setDeleteError(null);
+    try {
+      const response = await fetch(`${baseUrl.replace(/\/$/, "")}/tiles/${encodeURIComponent(tileUuid)}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { detail?: string };
+        throw new Error(payload.detail ?? `Delete failed (${response.status})`);
+      }
+
+      onTrackerRemoved();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to remove tracker.";
+      setDeleteError(message);
+      setDeletePending(false);
+    }
+  }, [baseUrl, details.label, onTrackerRemoved, tileUuid]);
+
   return (
     <section className="tile-details-panel">
       <div className="tile-details-header">
@@ -120,10 +161,24 @@ function DetailsContent({ details, onBack, baseUrl, tileUuid, onRefreshDetails }
           <h2>{details.label}</h2>
           <p className="tile-history-meta">{details.tile_uuid}</p>
         </div>
-        <button type="button" className="tile-details-back" onClick={onBack}>
-          Back to live map
-        </button>
+        <div className="tile-details-actions">
+          <button type="button" className="tile-details-back" onClick={onBack}>
+            Back to live map
+          </button>
+          <button
+            type="button"
+            className="tile-details-remove"
+            onClick={() => {
+              void handleDeleteTracker();
+            }}
+            disabled={deletePending}
+          >
+            {deletePending ? "Removing..." : "Remove tracker"}
+          </button>
+        </div>
       </div>
+
+      {deleteError ? <p className="tile-details-error">{deleteError}</p> : null}
 
       <div className="tile-details-stats">
         <article>
