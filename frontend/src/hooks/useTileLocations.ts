@@ -43,13 +43,26 @@ function createTileSocketSession(url: string, callbacks: TileSocketCallbacks): T
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   const connect = () => {
+    console.log(`[useTileLocations] Attempting to connect to: ${url}`);
     const ws = new WebSocket(url);
     socket = ws;
-    ws.addEventListener("open", () => handleOpen(ws, callbacks, () => isDisposed));
-    ws.addEventListener("close", () => handleClose(connect, callbacks, () => isDisposed, reconnectTimer, (value) => {
-      reconnectTimer = value;
-    }));
-    ws.addEventListener("message", (event) => handleMessage(event.data, callbacks));
+    ws.addEventListener("open", () => {
+      console.log("[useTileLocations] WebSocket OPEN event fired");
+      handleOpen(ws, callbacks, () => isDisposed);
+    });
+    ws.addEventListener("close", () => {
+      console.log("[useTileLocations] WebSocket CLOSE event fired");
+      handleClose(connect, callbacks, () => isDisposed, reconnectTimer, (value) => {
+        reconnectTimer = value;
+      });
+    });
+    ws.addEventListener("error", (event) => {
+      console.log("[useTileLocations] WebSocket ERROR event fired:", event);
+    });
+    ws.addEventListener("message", (event) => {
+      console.log("[useTileLocations] WebSocket MESSAGE received:", event.data);
+      handleMessage(event.data, callbacks);
+    });
   };
 
   connect();
@@ -82,18 +95,25 @@ function handleClose(
   reconnectTimer: ReturnType<typeof setTimeout> | null,
   setReconnectTimer: (value: ReturnType<typeof setTimeout> | null) => void,
 ) {
+  console.log("[useTileLocations] handleClose() called");
   if (isDisposed()) {
+    console.log("[useTileLocations] Socket was disposed, not reconnecting");
     return;
   }
 
+  console.log("[useTileLocations] Notifying client of disconnection");
   callbacks.onConnected(false);
   if (reconnectTimer) {
+    console.log("[useTileLocations] Reconnect timer already exists, not starting new one");
     return;
   }
 
+  console.log("[useTileLocations] Starting reconnect timer (1500ms delay)");
   const timer = setTimeout(() => {
+    console.log("[useTileLocations] Reconnect timer fired");
     setReconnectTimer(null);
     if (!isDisposed()) {
+      console.log("[useTileLocations] Calling reconnect()");
       reconnect();
     }
   }, 1500);

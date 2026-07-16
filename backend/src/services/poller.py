@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime
 from typing import Protocol
 
 from src.services.history_store import TileHistoryStore
@@ -34,12 +35,27 @@ class TilePoller:
         self._shutdown.set()
 
     async def run(self) -> None:
-        while not self._shutdown.is_set():
-            await self.poll_now()
-            try:
-                await asyncio.wait_for(self._shutdown.wait(), timeout=self.interval_seconds)
-            except TimeoutError:
-                continue
+        print(f"=== POLLER RUN: Starting with {self.interval_seconds}s interval")
+        poll_count = 0
+        try:
+            while not self._shutdown.is_set():
+                print(f"=== POLLER: About to call poll_now (cycle {poll_count + 1})")
+                await self.poll_now()
+                poll_count += 1
+                now = datetime.now().strftime("%H:%M:%S")
+                print(f"[{now}] === POLLER: Completed cycle {poll_count}")
+                print(f"[{now}] === POLLER: Entering wait with {self.interval_seconds}s timeout")
+                try:
+                    result = await asyncio.wait_for(self._shutdown.wait(), timeout=self.interval_seconds)
+                    print(f"[{now}] === POLLER: Shutdown event triggered!")
+                except asyncio.TimeoutError:
+                    now = datetime.now().strftime("%H:%M:%S")
+                    print(f"[{now}] === POLLER: Timeout fired, continuing to next cycle")
+                    continue
+        except Exception as e:
+            now = datetime.now().strftime("%H:%M:%S")
+            print(f"[{now}] === POLLER RUN CRASHED: {e}")
+            LOGGER.exception("Poller run loop crashed: %s", e)
 
     async def poll_now(self) -> None:
         async with self._poll_lock:
@@ -47,7 +63,10 @@ class TilePoller:
 
     async def _poll_once(self) -> None:
         try:
+            now = datetime.now().strftime("%H:%M:%S")
+            print(f"[{now}] === POLLER: Starting poll cycle")
             tiles = await self.tile_client.list_tiles()
+            print(f"[{now}] === POLLER: found {len(tiles)} tiles")
             updates: list[TileLocation] = []
             for tile in tiles:
                 location = await self.tile_client.get_tile_location(tile.uuid, tile.name)
@@ -55,15 +74,22 @@ class TilePoller:
                     updates.append(location)
 
             if updates:
+                print(f"[{now}] === POLLER: Recording {len(updates)} location updates")
                 self.history_store.record(updates)
 
             if self.ws_manager.has_connections():
                 latest = self.history_store.get_latest_locations()
+                print(f"[{now}] === POLLER: Broadcasting {len(latest)} latest locations")
                 await self.ws_manager.broadcast(
                     {
                         "type": "tile_locations",
                         "items": [item.model_dump(mode="json") for item in latest],
                     }
                 )
+            else:
+                print(f"[{now}] === POLLER: No WS connections, skipping broadcast")
+            print(f"[{now}] === POLLER: Poll cycle complete")
         except Exception as exc:
+            now = datetime.now().strftime("%H:%M:%S")
+            print(f"[{now}] === POLLER ERROR: {exc}")
             LOGGER.exception("Tile polling error: %s", exc)

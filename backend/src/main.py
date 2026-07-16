@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +13,7 @@ from src.services.leaderboard_store import LeaderboardStore
 from src.services.poller import TilePoller
 from src.services.ws_manager import WebSocketManager
 
+LOGGER = logging.getLogger(__name__)
 settings = get_settings()
 app = FastAPI(title=settings.app_name)
 
@@ -55,7 +57,12 @@ poller_task: asyncio.Task | None = None
 @app.on_event("startup")
 async def startup() -> None:
     global poller_task
+    print(f"=== STARTUP: Starting poller with interval: {settings.tile_poll_interval_seconds}s")
+    print(f"=== STARTUP: Home Assistant URL: {settings.home_assistant_url}")
+    print(f"=== STARTUP: Require hash: {settings.home_assistant_require_hash}")
+    print(f"=== STARTUP: Tile entities filter: {settings.home_assistant_tile_entities}")
     poller_task = asyncio.create_task(poller.run())
+    print("=== STARTUP: Poller task started")
 
 
 @app.on_event("shutdown")
@@ -68,17 +75,47 @@ async def shutdown() -> None:
 
 @app.websocket("/ws/locations")
 async def locations_ws(websocket: WebSocket) -> None:
-    await ws_manager.connect(websocket)
-    latest = history_store.get_latest_locations()
-    await websocket.send_json(
-        {
-            "type": "tile_locations",
-            "items": [item.model_dump(mode="json") for item in latest],
-        }
-    )
+    from datetime import datetime
+    now = datetime.now().strftime("%H:%M:%S")
+    print(f"[{now}] === WS: Handler started, websocket.client={websocket.client}", flush=True)
     try:
+        print(f"[{now}] === WS: About to call ws_manager.connect()", flush=True)
+        await ws_manager.connect(websocket)
+        now = datetime.now().strftime("%H:%M:%S")
+        print(f"[{now}] === WS: ws_manager.connect() succeeded", flush=True)
+        
+        # Send initial empty message - poller will send real data when it runs
+        now = datetime.now().strftime("%H:%M:%S")
+        print(f"[{now}] === WS: Sending initial empty message", flush=True)
+        await websocket.send_json({
+            "type": "tile_locations",
+            "items": [],
+        })
+        now = datetime.now().strftime("%H:%M:%S")
+        print(f"[{now}] === WS: Initial message sent successfully", flush=True)
+        
+        now = datetime.now().strftime("%H:%M:%S")
+        print(f"[{now}] === WS: Entering receive loop", flush=True)
         while True:
             # Keep the socket alive; frontend may send pings.
-            await websocket.receive_text()
+            msg = await websocket.receive_text()
+            now = datetime.now().strftime("%H:%M:%S")
+            print(f"[{now}] === WS: Received message: {msg}", flush=True)
     except WebSocketDisconnect:
-        ws_manager.disconnect(websocket)
+        now = datetime.now().strftime("%H:%M:%S")
+        print(f"[{now}] === WS: WebSocketDisconnect (normal closure)", flush=True)
+        try:
+            ws_manager.disconnect(websocket)
+        except Exception as e:
+            now = datetime.now().strftime("%H:%M:%S")
+            print(f"[{now}] === WS: Error disconnecting: {e}", flush=True)
+    except Exception as e:
+        now = datetime.now().strftime("%H:%M:%S")
+        print(f"[{now}] === WS ERROR: {type(e).__name__}: {e}", flush=True)
+        import traceback
+        print(traceback.format_exc(), flush=True)
+        LOGGER.exception("WebSocket error: %s", e)
+        try:
+            ws_manager.disconnect(websocket)
+        except Exception:
+            pass

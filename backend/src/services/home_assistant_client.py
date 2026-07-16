@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -104,29 +105,33 @@ class HomeAssistantTileClient:
     def _best_label(entity_id: str, attrs: dict[str, Any]) -> str:
         friendly_name = str(attrs.get("friendly_name") or "").strip()
         if "#" in friendly_name:
-            return friendly_name
+            label = friendly_name
+        else:
+            explicit_name = str(attrs.get("name") or "").strip()
+            if "#" in explicit_name:
+                label = explicit_name
+            else:
+                model = str(attrs.get("model") or "").strip()
+                if model:
+                    label = model
+                else:
+                    explicit_name = str(attrs.get("name") or "").strip()
+                    if explicit_name:
+                        label = explicit_name
+                    else:
+                        friendly_name = str(attrs.get("friendly_name") or "").strip()
+                        if friendly_name and friendly_name.lower() not in {"tile", "tile tracker"}:
+                            label = friendly_name
+                        else:
+                            suffix = entity_id.removeprefix("device_tracker.").replace("_", " ").strip()
+                            if suffix and suffix.lower() != "tile":
+                                label = suffix.title()
+                            else:
+                                label = friendly_name or entity_id
 
-        explicit_name = str(attrs.get("name") or "").strip()
-        if "#" in explicit_name:
-            return explicit_name
-
-        model = str(attrs.get("model") or "").strip()
-        if model:
-            return model
-
-        explicit_name = str(attrs.get("name") or "").strip()
-        if explicit_name:
-            return explicit_name
-
-        friendly_name = str(attrs.get("friendly_name") or "").strip()
-        if friendly_name and friendly_name.lower() not in {"tile", "tile tracker"}:
-            return friendly_name
-
-        suffix = entity_id.removeprefix("device_tracker.").replace("_", " ").strip()
-        if suffix and suffix.lower() != "tile":
-            return suffix.title()
-
-        return friendly_name or entity_id
+        # Strip leading "#X. " or "#X " pattern (e.g., "#17. Finnegan's Backpack" -> "Finnegan's Backpack")
+        label_cleaned = re.sub(r"^#\d+[\.\s]+", "", label).strip()
+        return label_cleaned or label
 
     @staticmethod
     def _contains_hash(state: dict[str, Any]) -> bool:

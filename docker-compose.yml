@@ -9,11 +9,11 @@ services:
     volumes:
       - ./backend/src:/app/src
       - ./backend/data:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "home-assistant:192.168.68.82"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-      interval: 20s
-      timeout: 5s
-      retries: 5
+      disable: true
 
   frontend:
     build:
@@ -24,5 +24,4 @@ services:
       - ./frontend:/app
       - /app/node_modules
     depends_on:
-      backend:
-        condition: service_healthy
+      - backend
