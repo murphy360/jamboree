@@ -1,5 +1,6 @@
-import { useEffect } from "react";
-import { CircleMarker, MapContainer, Polygon, Polyline, TileLayer, Tooltip, useMap } from "react-leaflet";
+import { useCallback, useEffect, useState } from "react";
+import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip, useMap } from "react-leaflet";
+import { AreaPolygons } from "./AreaPolygons";
 import { ArcGISLayers } from "./ArcGISLayers";
 import type { TileDwellCluster, CustomArea } from "../hooks/useTileDetails";
 import type { TileLocation } from "../hooks/useTileLocations";
@@ -69,32 +70,19 @@ function DwellClusterMarkers({ clusters, maxMinutes }: { clusters: TileDwellClus
   );
 }
 
-function AreaPolygons({ areas }: { areas: CustomArea[] }) {
-  return (
-    <>
-      {areas.map((area) => {
-        const positions = area.polygon.map((pt) => [pt.latitude, pt.longitude] as [number, number]);
-        return (
-          <Polygon
-            key={area.area_id}
-            positions={positions}
-            pathOptions={{ color: "#7c3aed", fillColor: "#a78bfa", fillOpacity: 0.25, weight: 2 }}
-          >
-            <Tooltip permanent direction="center" className="tile-area-label">
-              {area.name}
-            </Tooltip>
-          </Polygon>
-        );
-      })}
-    </>
-  );
-}
-
 export function TileDetailsMap({ history, dwellClusters, customAreas = [], selectedHotspot }: TileDetailsMapProps) {
   const path = history.map((item) => [item.latitude, item.longitude] as [number, number]);
   const start = history[0];
   const end = history[history.length - 1];
   const maxMinutes = dwellClusters.reduce((max, cluster) => Math.max(max, cluster.minutes_spent), 0);
+  const [visibleAreaLabels, setVisibleAreaLabels] = useState<Record<string, boolean>>({});
+
+  const toggleAreaLabel = useCallback((areaId: string) => {
+    setVisibleAreaLabels((current) => ({
+      ...current,
+      [areaId]: !current[areaId],
+    }));
+  }, []);
 
   return (
     <section className="tile-details-map-frame">
@@ -125,7 +113,7 @@ export function TileDetailsMap({ history, dwellClusters, customAreas = [], selec
           />
         ) : null}
         <DwellClusterMarkers clusters={dwellClusters} maxMinutes={maxMinutes} />
-        <AreaPolygons areas={customAreas} />
+        <AreaPolygons areas={customAreas} visibleLabels={visibleAreaLabels} onToggleLabel={toggleAreaLabel} />
         {selectedHotspot ? (
           <CircleMarker
             center={[selectedHotspot.latitude, selectedHotspot.longitude]}
