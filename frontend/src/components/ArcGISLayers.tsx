@@ -5,10 +5,12 @@ import * as EsriLeaflet from "esri-leaflet";
 
 type ArcGISLayersProps = {
   showNSJRegions?: boolean;
+  showSummitLakes?: boolean;
 };
 
 export function ArcGISLayers({
   showNSJRegions = true,
+  showSummitLakes = true,
 }: ArcGISLayersProps) {
   const map = useMap();
 
@@ -31,6 +33,24 @@ export function ArcGISLayers({
         layers.push(featureLayer);
       } catch (e) {
         console.error("Failed to load NSJ_General_Regions:", e);
+      }
+    }
+
+    if (showSummitLakes) {
+      try {
+        const featureLayer = EsriLeaflet.featureLayer({
+          url: "https://services1.arcgis.com/RpUtm89cWZfyYWZf/arcgis/rest/services/Summit_Lakes/FeatureServer/0",
+          style: () => ({
+            color: "#14b8a6",
+            weight: 2,
+            opacity: 0.8,
+            fillOpacity: 0.08,
+          }),
+        });
+        featureLayer.addTo(map);
+        layers.push(featureLayer);
+      } catch (e) {
+        console.error("Failed to load Summit_Lakes:", e);
       }
     }
 
