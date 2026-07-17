@@ -550,20 +550,25 @@ body {
 .tile-area-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
 .tile-area-cancel { padding: 0.28rem 0.7rem; background: white; border: 1px solid #94a3b8; border-radius: 4px; cursor: pointer; font-size: 0.875rem; }
 
-.map-area-label {
+.map-area-label-marker {
+  background: transparent;
+  border: none;
+}
+
+.map-area-label-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: rgba(15, 23, 42, 0.95);
   color: #f8fafc;
-  border: none;
   border-radius: 999px;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.22);
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.01em;
   padding: 0.18rem 0.55rem;
-}
-
-.map-area-label::before {
-  border-top-color: rgba(15, 23, 42, 0.95);
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
 }
 
 /* ── App Nav ──────────────────────────────────────── */
