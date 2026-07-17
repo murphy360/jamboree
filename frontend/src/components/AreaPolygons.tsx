@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { divIcon, latLngBounds, point } from "leaflet";
 import { Marker, Polygon } from "react-leaflet";
 import type { CustomArea } from "../hooks/useTileDetails";
@@ -29,9 +30,8 @@ export function AreaPolygons({ areas, visibleLabels, onToggleLabel }: AreaPolygo
         };
 
         return (
-          <>
+          <Fragment key={area.area_id}>
             <Polygon
-              key={area.area_id}
               positions={positions}
               interactive={true}
               bubblingMouseEvents={false}
@@ -39,7 +39,7 @@ export function AreaPolygons({ areas, visibleLabels, onToggleLabel }: AreaPolygo
               eventHandlers={{ click: handleClick }}
             />
             {isLabelVisible ? <Marker position={center} icon={labelIcon} interactive={false} /> : null}
-          </>
+          </Fragment>
         );
       })}
     </>
