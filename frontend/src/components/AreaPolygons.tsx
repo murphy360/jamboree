@@ -29,16 +29,17 @@ export function AreaPolygons({ areas, visibleLabels, onToggleLabel }: AreaPolygo
         };
 
         return (
-          <Polygon
-            key={area.area_id}
-            positions={positions}
-            interactive={true}
-            bubblingMouseEvents={false}
-            pathOptions={getAreaPolygonStyle(area.name)}
-            eventHandlers={{ click: handleClick }}
-          >
-          </Polygon>
+          <>
+            <Polygon
+              key={area.area_id}
+              positions={positions}
+              interactive={true}
+              bubblingMouseEvents={false}
+              pathOptions={getAreaPolygonStyle(area.name)}
+              eventHandlers={{ click: handleClick }}
+            />
             {isLabelVisible ? <Marker position={center} icon={labelIcon} interactive={false} /> : null}
+          </>
         );
       })}
     </>
