@@ -5,8 +5,9 @@ import { useTileDetails } from "./hooks/useTileDetails";
 import { useTileLocations } from "./hooks/useTileLocations";
 import { TileDetailsPage } from "./components/TileDetailsPage";
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? "/api";
-const WS_URL = import.meta.env.VITE_WS_URL ?? "/ws/locations";
+const host = typeof window !== "undefined" ? window.location.hostname : "localhost";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? `http://${host}:8086`;
+const WS_URL = import.meta.env.VITE_WS_URL ?? `ws://${host}:8086/ws/locations`;
 
 export function App() {
   const { locations, connected } = useTileLocations(BACKEND_URL, WS_URL);
