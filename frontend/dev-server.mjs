@@ -3,6 +3,19 @@ import http from "node:http";
 import httpProxy from "http-proxy";
 import { createServer as createViteServer } from "vite";
 
+process.on("uncaughtException", (error) => {
+  const maybeCode =
+    error && typeof error === "object" && "code" in error
+      ? String(error.code)
+      : "";
+  if (maybeCode === "ECONNRESET") {
+    // Ignore client socket resets so the dev server keeps running.
+    return;
+  }
+
+  throw error;
+});
+
 const backendHttpProxy = httpProxy.createProxyServer({
   changeOrigin: true,
   secure: false,
@@ -35,6 +48,10 @@ const vite = await createViteServer({
 });
 
 const server = http.createServer((request, response) => {
+  request.socket.on("error", () => {
+    // Ignore client socket teardown errors.
+  });
+
   const rawUrl = request.url ?? "";
   const requestUrl = new URL(rawUrl, "http://localhost");
   const pathname = requestUrl.pathname;
@@ -73,6 +90,10 @@ const server = http.createServer((request, response) => {
 });
 
 server.on("upgrade", (request, socket, head) => {
+  socket.on("error", () => {
+    // Ignore client websocket teardown errors.
+  });
+
   const rawUrl = request.url ?? "";
   const requestUrl = new URL(rawUrl, "http://localhost");
 
