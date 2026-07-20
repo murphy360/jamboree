@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --port 5174",
+    "dev": "node dev-server.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0 --port 5174",
     "lint": "eslint . --ext ts,tsx --max-warnings 0"
@@ -14,6 +14,7 @@
     "@types/leaflet-draw": "^1.0.13",
     "esri-leaflet": "^3.0.12",
     "esri-leaflet-vector": "^4.2.1",
+    "http-proxy": "^1.18.1",
     "leaflet": "^1.9.4",
     "leaflet-draw": "^1.0.4",
     "prop-types": "^15.8.1",

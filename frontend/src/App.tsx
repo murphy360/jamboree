@@ -5,12 +5,11 @@ import { useTileDetails } from "./hooks/useTileDetails";
 import { useTileLocations } from "./hooks/useTileLocations";
 import { TileDetailsPage } from "./components/TileDetailsPage";
 
-const _host = typeof window !== "undefined" ? window.location.hostname : "localhost";
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? `http://${_host}:8086`;
-const WS_URL = import.meta.env.VITE_WS_URL ?? `ws://${_host}:8086/ws/locations`;
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? "/api";
+const WS_URL = import.meta.env.VITE_WS_URL ?? "/ws/locations";
 
 export function App() {
-  const { locations, connected } = useTileLocations(WS_URL);
+  const { locations, connected } = useTileLocations(BACKEND_URL, WS_URL);
   const { backendConnected, homeAssistantConnected, tileCount } = useSystemStatus(BACKEND_URL);
   const [detailsTileUuid, setDetailsTileUuid] = useState<string | null>(null);
   const [detailsRefreshKey, setDetailsRefreshKey] = useState(0);

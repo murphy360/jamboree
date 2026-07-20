@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 export type TileLocation = {
   tile_uuid: string;
@@ -23,6 +23,16 @@ type TileSocketCallbacks = {
 type TileSocketSession = {
   dispose: () => void;
 };
+
+async function fetchLatestLocations(baseUrl: string): Promise<TileLocation[]> {
+  const response = await fetch(`${baseUrl}/locations/latest`);
+  if (!response.ok) {
+    return [];
+  }
+
+  const payload = (await response.json()) as TileLocation[];
+  return Array.isArray(payload) ? payload : [];
+}
 
 function parseLocationMessage(payload: string): TileLocation[] | null {
   try {
@@ -149,16 +159,26 @@ function safelyCloseSocket(socket: WebSocket | null) {
   }
 }
 
-export function useTileLocations(url: string) {
+export function useTileLocations(baseUrl: string, url: string) {
   const [locations, setLocations] = useState<TileLocation[]>([]);
   const [connected, setConnected] = useState(false);
 
-  const normalizedUrl = useMemo(() => url.trim(), [url]);
+  const normalizedBaseUrl = baseUrl.trim().replace(/\/$/, "");
+  const normalizedUrl = url.trim();
 
   useEffect(() => {
     if (!normalizedUrl) {
       return;
     }
+
+    let cancelled = false;
+
+    void (async () => {
+      const latestLocations = await fetchLatestLocations(normalizedBaseUrl);
+      if (!cancelled && latestLocations.length > 0) {
+        setLocations(latestLocations);
+      }
+    })();
 
     const session = createTileSocketSession(normalizedUrl, {
       onConnected: setConnected,
@@ -166,9 +186,10 @@ export function useTileLocations(url: string) {
     });
 
     return () => {
+      cancelled = true;
       session.dispose();
     };
-  }, [normalizedUrl]);
+  }, [normalizedBaseUrl, normalizedUrl]);
 
   return { locations, connected };
 }

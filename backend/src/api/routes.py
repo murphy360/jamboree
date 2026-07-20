@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from src.core.settings import HealthResponse, TileStatusResponse, get_settings
@@ -7,6 +9,7 @@ from src.services.models import (
     GisLayerImportRequest,
     GisLayerImportResponse,
     LeaderboardResponse,
+    TileLocation,
     TileDetailsResponse,
     TileHistoryResponse,
     UpdateAreaRequest,
@@ -48,6 +51,12 @@ async def tile_timestamps(request: Request) -> dict:
         raise HTTPException(status_code=502, detail=f"Unable to inspect tile timestamp payloads: {str(exc)[:280]}") from exc
 
     return {"count": len(items), "items": items}
+
+
+@router.get("/locations/latest", response_model=list[TileLocation])
+async def latest_locations(request: Request) -> list[TileLocation]:
+    history_store = request.app.state.history_store
+    return await asyncio.to_thread(history_store.get_latest_locations)
 
 
 @router.get("/tiles/{tile_uuid}/history", response_model=TileHistoryResponse)
