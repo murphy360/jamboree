@@ -2,6 +2,7 @@ import asyncio
 import logging
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.routes import router
@@ -83,16 +84,17 @@ async def locations_ws(websocket: WebSocket) -> None:
         await ws_manager.connect(websocket)
         now = datetime.now().strftime("%H:%M:%S")
         print(f"[{now}] === WS: ws_manager.connect() succeeded", flush=True)
-        
-        # Send initial empty message - poller will send real data when it runs
+
+        # Send the latest stored locations immediately so the UI does not wait for the next poll.
         now = datetime.now().strftime("%H:%M:%S")
-        print(f"[{now}] === WS: Sending initial empty message", flush=True)
+        print(f"[{now}] === WS: Sending initial latest locations message", flush=True)
+        latest_locations = await asyncio.to_thread(history_store.get_latest_locations)
         await websocket.send_json({
             "type": "tile_locations",
-            "items": [],
+            "items": jsonable_encoder(latest_locations),
         })
         now = datetime.now().strftime("%H:%M:%S")
-        print(f"[{now}] === WS: Initial message sent successfully", flush=True)
+        print(f"[{now}] === WS: Initial latest locations message sent successfully", flush=True)
         
         now = datetime.now().strftime("%H:%M:%S")
         print(f"[{now}] === WS: Entering receive loop", flush=True)
