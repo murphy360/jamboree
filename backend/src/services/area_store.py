@@ -6,11 +6,20 @@ import json
 import math
 import sqlite3
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock
 
 from src.services.models import AreaPolygonPoint, CustomArea, TileLocation
+
+
+@dataclass(frozen=True)
+class ImportedAreaSource:
+    source_type: str
+    source_name: str
+    source_url: str
+    source_feature_id: str
 
 
 # ---------------------------------------------------------------------------
@@ -144,10 +153,15 @@ class AreaStore:
                     name TEXT NOT NULL,
                     polygon_json TEXT NOT NULL,
                     created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
+                    updated_at TEXT NOT NULL,
+                    source_type TEXT NOT NULL DEFAULT 'manual',
+                    source_name TEXT,
+                    source_url TEXT,
+                    source_feature_id TEXT
                 )
                 """
             )
+            self._ensure_columns()
             self._connection.execute(
                 """
                 CREATE INDEX IF NOT EXISTS idx_custom_areas_tile
@@ -155,6 +169,23 @@ class AreaStore:
                 """
             )
             self._connection.commit()
+
+    def _ensure_columns(self) -> None:
+        columns = {
+            row["name"]
+            for row in self._connection.execute("PRAGMA table_info(custom_areas)").fetchall()
+        }
+
+        statements = {
+            "source_type": "ALTER TABLE custom_areas ADD COLUMN source_type TEXT NOT NULL DEFAULT 'manual'",
+            "source_name": "ALTER TABLE custom_areas ADD COLUMN source_name TEXT",
+            "source_url": "ALTER TABLE custom_areas ADD COLUMN source_url TEXT",
+            "source_feature_id": "ALTER TABLE custom_areas ADD COLUMN source_feature_id TEXT",
+        }
+
+        for column_name, statement in statements.items():
+            if column_name not in columns:
+                self._connection.execute(statement)
 
     # ------------------------------------------------------------------
     # CRUD
@@ -165,6 +196,10 @@ class AreaStore:
         tile_uuid: str,
         name: str,
         cluster_centers: list[AreaPolygonPoint | tuple[float, float]],
+        source_type: str = "manual",
+        source_name: str | None = None,
+        source_url: str | None = None,
+        source_feature_id: str | None = None,
     ) -> CustomArea:
         """Compute convex hull of cluster centers and persist the area."""
         raw_points: list[tuple[float, float]] = []
@@ -185,10 +220,21 @@ class AreaStore:
             self._connection.execute(
                 """
                 INSERT INTO custom_areas
-                    (area_id, tile_uuid, name, polygon_json, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                    (area_id, tile_uuid, name, polygon_json, created_at, updated_at, source_type, source_name, source_url, source_feature_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (area_id, tile_uuid, name, polygon_json, now, now),
+                (
+                    area_id,
+                    tile_uuid,
+                    name,
+                    polygon_json,
+                    now,
+                    now,
+                    source_type,
+                    source_name,
+                    source_url,
+                    source_feature_id,
+                ),
             )
             self._connection.commit()
 
@@ -199,6 +245,10 @@ class AreaStore:
             polygon=polygon,
             created_at=datetime.fromisoformat(now),
             updated_at=datetime.fromisoformat(now),
+            source_type=source_type,
+            source_name=source_name,
+            source_url=source_url,
+            source_feature_id=source_feature_id,
         )
 
     def merge_area(
@@ -277,7 +327,7 @@ class AreaStore:
         with self._lock:
             rows = self._connection.execute(
                 """
-                SELECT area_id, tile_uuid, name, polygon_json, created_at, updated_at
+                SELECT area_id, tile_uuid, name, polygon_json, created_at, updated_at, source_type, source_name, source_url, source_feature_id
                 FROM custom_areas
                 ORDER BY created_at ASC
                 """
@@ -295,7 +345,7 @@ class AreaStore:
             self._connection.commit()
             row = self._connection.execute(
                 """
-                SELECT area_id, tile_uuid, name, polygon_json, created_at, updated_at
+                SELECT area_id, tile_uuid, name, polygon_json, created_at, updated_at, source_type, source_name, source_url, source_feature_id
                 FROM custom_areas WHERE area_id = ?
                 """,
                 (area_id,),
@@ -360,6 +410,10 @@ class AreaStore:
                     minutes_spent=seconds_spent // 60,
                     created_at=area.created_at,
                     updated_at=area.updated_at,
+                    source_type=area.source_type,
+                    source_name=area.source_name,
+                    source_url=area.source_url,
+                    source_feature_id=area.source_feature_id,
                 )
             )
 
@@ -381,19 +435,97 @@ class AreaStore:
             polygon=polygon,
             created_at=datetime.fromisoformat(row["created_at"]),
             updated_at=datetime.fromisoformat(row["updated_at"]),
+            source_type=row["source_type"] or "manual",
+            source_name=row["source_name"],
+            source_url=row["source_url"],
+            source_feature_id=row["source_feature_id"],
         )
 
     def _get_area_by_id(self, area_id: str) -> CustomArea | None:
         with self._lock:
             row = self._connection.execute(
                 """
-                SELECT area_id, tile_uuid, name, polygon_json, created_at, updated_at
+                SELECT area_id, tile_uuid, name, polygon_json, created_at, updated_at, source_type, source_name, source_url, source_feature_id
                 FROM custom_areas
                 WHERE area_id = ?
                 """,
                 (area_id,),
             ).fetchone()
         return self._row_to_area(row) if row else None
+
+    def get_area_by_source(self, source: ImportedAreaSource) -> CustomArea | None:
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT area_id, tile_uuid, name, polygon_json, created_at, updated_at, source_type, source_name, source_url, source_feature_id
+                FROM custom_areas
+                WHERE source_type = ? AND source_url = ? AND source_feature_id = ?
+                """,
+                (source.source_type, source.source_url, source.source_feature_id),
+            ).fetchone()
+        return self._row_to_area(row) if row else None
+
+    def upsert_imported_area(
+        self,
+        tile_uuid: str,
+        name: str,
+        polygon: list[AreaPolygonPoint],
+        source: ImportedAreaSource,
+    ) -> CustomArea:
+        polygon_json = json.dumps(
+            [{"latitude": point.latitude, "longitude": point.longitude} for point in polygon]
+        )
+        now = datetime.now(UTC).isoformat()
+        existing = self.get_area_by_source(source)
+
+        with self._lock:
+            if existing:
+                self._connection.execute(
+                    """
+                    UPDATE custom_areas
+                    SET tile_uuid = ?, name = ?, polygon_json = ?, updated_at = ?, source_name = ?, source_url = ?, source_feature_id = ?, source_type = ?
+                    WHERE area_id = ?
+                    """,
+                    (
+                        tile_uuid,
+                        name,
+                        polygon_json,
+                        now,
+                        source.source_name,
+                        source.source_url,
+                        source.source_feature_id,
+                        source.source_type,
+                        existing.area_id,
+                    ),
+                )
+                area_id = existing.area_id
+            else:
+                area_id = str(uuid.uuid4())
+                self._connection.execute(
+                    """
+                    INSERT INTO custom_areas
+                        (area_id, tile_uuid, name, polygon_json, created_at, updated_at, source_type, source_name, source_url, source_feature_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        area_id,
+                        tile_uuid,
+                        name,
+                        polygon_json,
+                        now,
+                        now,
+                        source.source_type,
+                        source.source_name,
+                        source.source_url,
+                        source.source_feature_id,
+                    ),
+                )
+            self._connection.commit()
+
+        updated = self._get_area_by_id(area_id)
+        if not updated:
+            raise ValueError("Imported area could not be loaded after save.")
+        return updated
 
     def _buffer_point(
         self,

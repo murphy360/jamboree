@@ -17,20 +17,72 @@ export function ArcGISLayers({
   useEffect(() => {
     const layers: L.Layer[] = [];
 
+    const getFeatureLabel = (properties: Record<string, unknown> | undefined): string | null => {
+      const labelKeys = ["NAME", "Name", "name", "LABEL", "Label", "label", "TITLE", "Title", "title"];
+
+      for (const key of labelKeys) {
+        const value = properties?.[key];
+        if (typeof value === "string" && value.trim()) {
+          return value.trim();
+        }
+      }
+
+      return null;
+    };
+
+    const addToggleableFeatureLayer = (url: string, styleColor: string, fillOpacity: number) => {
+      const featureLayer = EsriLeaflet.featureLayer({
+        url,
+        style: () => ({
+          color: styleColor,
+          weight: 2,
+          opacity: 0.85,
+          fillOpacity,
+        }),
+      });
+
+      featureLayer.on("createfeature", (event: { layer?: L.Layer; feature?: { properties?: Record<string, unknown> } }) => {
+        const layer = event.layer;
+        if (!layer || !(layer instanceof L.Path)) {
+          return;
+        }
+
+        const label = getFeatureLabel(event.feature?.properties);
+        if (!label) {
+          return;
+        }
+
+        layer.bindTooltip(label, {
+          direction: "center",
+          className: "map-area-label",
+          sticky: false,
+          permanent: false,
+          opacity: 1,
+        });
+
+        layer.on("click", (clickEvent: L.LeafletMouseEvent) => {
+          clickEvent.originalEvent?.stopPropagation();
+          if (layer.isTooltipOpen()) {
+            layer.closeTooltip();
+            return;
+          }
+
+          layer.openTooltip(clickEvent.latlng);
+        });
+      });
+
+      featureLayer.addTo(map);
+      layers.push(featureLayer);
+    };
+
     // Add NSJ General Regions overlay
     if (showNSJRegions) {
       try {
-        const featureLayer = EsriLeaflet.featureLayer({
-          url: "https://services1.arcgis.com/RpUtm89cWZfyYWZf/ArcGIS/rest/services/NSJ_General_Regions/FeatureServer/0",
-          style: () => ({
-            color: "#0078D4",
-            weight: 2,
-            opacity: 0.7,
-            fillOpacity: 0.1,
-          }),
-        });
-        featureLayer.addTo(map);
-        layers.push(featureLayer);
+        addToggleableFeatureLayer(
+          "https://services1.arcgis.com/RpUtm89cWZfyYWZf/ArcGIS/rest/services/NSJ_General_Regions/FeatureServer/0",
+          "#0078D4",
+          0.1,
+        );
       } catch (e) {
         console.error("Failed to load NSJ_General_Regions:", e);
       }
@@ -38,17 +90,11 @@ export function ArcGISLayers({
 
     if (showSummitLakes) {
       try {
-        const featureLayer = EsriLeaflet.featureLayer({
-          url: "https://services1.arcgis.com/RpUtm89cWZfyYWZf/arcgis/rest/services/Summit_Lakes/FeatureServer/0",
-          style: () => ({
-            color: "#14b8a6",
-            weight: 2,
-            opacity: 0.8,
-            fillOpacity: 0.08,
-          }),
-        });
-        featureLayer.addTo(map);
-        layers.push(featureLayer);
+        addToggleableFeatureLayer(
+          "https://services1.arcgis.com/RpUtm89cWZfyYWZf/arcgis/rest/services/Summit_Lakes/FeatureServer/0",
+          "#14b8a6",
+          0.08,
+        );
       } catch (e) {
         console.error("Failed to load Summit_Lakes:", e);
       }
@@ -61,7 +107,7 @@ export function ArcGISLayers({
         }
       });
     };
-  }, [map, showNSJRegions]);
+  }, [map, showNSJRegions, showSummitLakes]);
 
   return null;
 }

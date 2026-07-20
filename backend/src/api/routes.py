@@ -4,11 +4,14 @@ from src.core.settings import HealthResponse, TileStatusResponse, get_settings
 from src.services.models import (
     CreateAreaRequest,
     CustomArea,
+    GisLayerImportRequest,
+    GisLayerImportResponse,
     LeaderboardResponse,
     TileDetailsResponse,
     TileHistoryResponse,
     UpdateAreaRequest,
 )
+from src.services.gis_importer import GisImporter
 
 router = APIRouter()
 
@@ -122,6 +125,31 @@ async def create_area(
         return area_store.create_area(tile_uuid, body.name, body.cluster_centers)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/gis/import", response_model=GisLayerImportResponse)
+async def import_gis_layer(body: GisLayerImportRequest, request: Request) -> GisLayerImportResponse:
+    area_store = request.app.state.area_store
+    importer = GisImporter(area_store)
+
+    try:
+        result = await importer.import_arcgis_layer(
+            layer_name=body.layer_name,
+            service_url=body.service_url,
+            tile_uuid=body.tile_uuid,
+            layer_index=body.layer_index,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"GIS import failed: {str(exc)[:280]}") from exc
+
+    return GisLayerImportResponse(
+        layer_name=result.layer_name,
+        service_url=result.service_url,
+        tile_uuid=result.tile_uuid,
+        imported=result.imported,
+        updated=result.updated,
+        skipped=result.skipped,
+    )
 
 
 @router.patch("/tiles/{tile_uuid}/areas/{area_id}", response_model=CustomArea)

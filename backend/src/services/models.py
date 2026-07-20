@@ -71,6 +71,10 @@ class CustomArea(BaseModel):
     minutes_spent: int = 0
     created_at: datetime
     updated_at: datetime
+    source_type: str = "manual"
+    source_name: str | None = None
+    source_url: str | None = None
+    source_feature_id: str | None = None
 
 
 class CreateAreaRequest(BaseModel):
@@ -78,6 +82,22 @@ class CreateAreaRequest(BaseModel):
     cluster_centers: list[AreaPolygonPoint]
     hotspot_centers: list[AreaPolygonPoint] = []
     merge_into_area_id: str | None = None
+
+
+class GisLayerImportRequest(BaseModel):
+    layer_name: str
+    service_url: str
+    tile_uuid: str = "global"
+    layer_index: int = 0
+
+
+class GisLayerImportResponse(BaseModel):
+    layer_name: str
+    service_url: str
+    tile_uuid: str
+    imported: int
+    updated: int
+    skipped: int
 
 
 class LeaderboardEntry(BaseModel):
