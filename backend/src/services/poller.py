@@ -30,6 +30,10 @@ class TilePoller:
         self.interval_seconds = interval_seconds
         self._shutdown = asyncio.Event()
         self._poll_lock = asyncio.Lock()
+        self._latest_cache: list[TileLocation] = []
+
+    def get_cached_latest_locations(self) -> list[TileLocation]:
+        return list(self._latest_cache)
 
     async def stop(self) -> None:
         self._shutdown.set()
@@ -76,9 +80,14 @@ class TilePoller:
             if updates:
                 print(f"[{now}] === POLLER: Recording {len(updates)} location updates")
                 await asyncio.to_thread(self.history_store.record, updates)
+                self._latest_cache = sorted(updates, key=lambda item: item.label)
 
             if self.ws_manager.has_connections():
-                latest = await asyncio.to_thread(self.history_store.get_latest_locations)
+                # Prefer fresh poll results for live updates; fall back to storage when needed.
+                if updates:
+                    latest = self.get_cached_latest_locations()
+                else:
+                    latest = await asyncio.to_thread(self.history_store.get_latest_locations)
                 print(f"[{now}] === POLLER: Broadcasting {len(latest)} latest locations")
                 await self.ws_manager.broadcast(
                     {

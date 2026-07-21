@@ -64,13 +64,16 @@ async def tile_timestamps(request: Request) -> dict:
 @router.get("/locations/latest", response_model=list[TileLocation])
 async def latest_locations(request: Request) -> list[TileLocation]:
     history_store = request.app.state.history_store
+    poller = request.app.state.poller
     try:
         return await asyncio.wait_for(
             asyncio.to_thread(history_store.get_latest_locations),
             timeout=HISTORY_IO_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError:
-        return []
+        return poller.get_cached_latest_locations()
+    except Exception:
+        return poller.get_cached_latest_locations()
 
 
 @router.get("/tiles/{tile_uuid}/history", response_model=TileHistoryResponse)
