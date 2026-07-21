@@ -177,11 +177,15 @@ export function useTileLocations(baseUrl: string, url: string) {
 
     let cancelled = false;
 
-    void (async () => {
+    const refreshLatest = async () => {
       const latestLocations = await fetchLatestLocations(normalizedBaseUrl);
       if (!cancelled && latestLocations.length > 0) {
         setLocations(latestLocations);
       }
+    };
+
+    void (async () => {
+      await refreshLatest();
     })();
 
     const session = createTileSocketSession(normalizedUrl, {
@@ -189,9 +193,16 @@ export function useTileLocations(baseUrl: string, url: string) {
       onItems: setLocations,
     });
 
+    // Keep a lightweight fallback refresh so the list can recover if websocket
+    // updates are delayed or a connection flaps during page load.
+    const refreshTimer = window.setInterval(() => {
+      void refreshLatest();
+    }, 5000);
+
     return () => {
       cancelled = true;
       session.dispose();
+      window.clearInterval(refreshTimer);
     };
   }, [normalizedBaseUrl, normalizedUrl]);
 
