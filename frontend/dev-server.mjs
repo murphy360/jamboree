@@ -3,19 +3,6 @@ import http from "node:http";
 import httpProxy from "http-proxy";
 import { createServer as createViteServer } from "vite";
 
-process.on("uncaughtException", (error) => {
-  const maybeCode =
-    error && typeof error === "object" && "code" in error
-      ? String(error.code)
-      : "";
-  if (maybeCode === "ECONNRESET") {
-    // Ignore client socket resets so the dev server keeps running.
-    return;
-  }
-
-  throw error;
-});
-
 const backendHttpProxy = httpProxy.createProxyServer({
   changeOrigin: true,
   secure: false,
@@ -87,6 +74,10 @@ const server = http.createServer((request, response) => {
     response.statusCode = 404;
     response.end("Not found");
   });
+});
+
+server.on("clientError", (_error, socket) => {
+  socket.destroy();
 });
 
 server.on("upgrade", (request, socket, head) => {
