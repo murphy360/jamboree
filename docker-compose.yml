@@ -7,7 +7,6 @@ services:
     ports:
       - "8086:8000"
     volumes:
-      - ./backend/src:/app/src
       - ./backend/data:/app/data
     extra_hosts:
       - "host.docker.internal:host-gateway"
