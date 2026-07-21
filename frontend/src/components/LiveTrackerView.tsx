@@ -13,6 +13,7 @@ import {
 } from "../utils/tileAge";
 import { LiveMap } from "./LiveMap";
 import { LeaderboardPanel } from "./LeaderboardPanel";
+import { CustomAreasPanel } from "./CustomAreasPanel";
 
 type LiveTrackerViewProps = {
   backendUrl: string;
@@ -21,7 +22,7 @@ type LiveTrackerViewProps = {
   showGisLayers: boolean;
 };
 
-type TileListMode = "all" | "areas" | "moving" | "leaderboard";
+type TileListMode = "all" | "areas" | "moving" | "leaderboard" | "area-editor";
 
 type AreaGroupedTileList = {
   area: CustomArea;
@@ -321,7 +322,7 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
     }));
   };
 
-  const { areas, createArea } = useCustomAreas({
+  const { areas, createArea, renameArea, deleteArea } = useCustomAreas({
     baseUrl: backendUrl,
     tileUuid: "global", // Placeholder UUID to fetch global areas
     onRefresh: () => {},
@@ -387,7 +388,7 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
         selectedTileUuid={null}
         onTileClick={() => {}}
         onMapClick={() => {}}
-        onDrawPolygon={handleDrawPolygon}
+        onDrawPolygon={tileListMode === "area-editor" ? handleDrawPolygon : undefined}
         showGisLayers={showGisLayers}
       />
 
@@ -415,6 +416,12 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
           onClick={() => setTileListMode("leaderboard")}
         >
           Leaderboard
+        </button>
+        <button
+          className={tileListMode === "area-editor" ? "is-active" : ""}
+          onClick={() => setTileListMode("area-editor")}
+        >
+          Area Editor
         </button>
       </div>
 
@@ -447,6 +454,16 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
       )}
 
       {tileListMode === "leaderboard" && <LeaderboardPanel backendUrl={backendUrl} />}
+
+      {tileListMode === "area-editor" && (
+        <section className="tile-details-panel">
+          <h3 className="tile-details-subtitle">Area Editor</h3>
+          <p className="tile-list-empty">
+            Draw a polygon directly on the map to create an area. Rename or delete existing areas below.
+          </p>
+          <CustomAreasPanel areas={areas} onRename={renameArea} onDelete={deleteArea} />
+        </section>
+      )}
     </div>
   );
 }
