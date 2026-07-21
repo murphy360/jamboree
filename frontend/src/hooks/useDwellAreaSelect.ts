@@ -7,7 +7,11 @@ type UseDwellAreaSelectOptions = {
   onCreateArea: (
     name: string,
     centers: AreaPolygonPoint[],
-    options?: { mergeIntoAreaId?: string; mergeSourceAreaIds?: string[] },
+    options?: {
+      mergeIntoAreaId?: string;
+      mergeSourceAreaIds?: string[];
+      hotspotCenters?: AreaPolygonPoint[];
+    },
   ) => Promise<void>;
 };
 
