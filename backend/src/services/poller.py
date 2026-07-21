@@ -75,10 +75,10 @@ class TilePoller:
 
             if updates:
                 print(f"[{now}] === POLLER: Recording {len(updates)} location updates")
-                self.history_store.record(updates)
+                await asyncio.to_thread(self.history_store.record, updates)
 
             if self.ws_manager.has_connections():
-                latest = self.history_store.get_latest_locations()
+                latest = await asyncio.to_thread(self.history_store.get_latest_locations)
                 print(f"[{now}] === POLLER: Broadcasting {len(latest)} latest locations")
                 await self.ws_manager.broadcast(
                     {
