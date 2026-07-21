@@ -17,6 +17,8 @@ from src.services.models import (
 from src.services.gis_importer import GisImporter
 
 router = APIRouter()
+HISTORY_IO_TIMEOUT_SECONDS = 3
+TILE_STATUS_TIMEOUT_SECONDS = 6
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -29,8 +31,14 @@ async def health() -> HealthResponse:
 async def tile_status(request: Request) -> TileStatusResponse:
     tile_client = request.app.state.tile_client
     try:
-        tiles = await tile_client.list_tiles()
+        tiles = await asyncio.wait_for(tile_client.list_tiles(), timeout=TILE_STATUS_TIMEOUT_SECONDS)
         return TileStatusResponse(ok=True, tile_count=len(tiles), detail="Tracker source reachable")
+    except asyncio.TimeoutError:
+        return TileStatusResponse(
+            ok=False,
+            tile_count=0,
+            detail="Tile API request timed out",
+        )
     except Exception as exc:
         return TileStatusResponse(
             ok=False,
@@ -56,7 +64,13 @@ async def tile_timestamps(request: Request) -> dict:
 @router.get("/locations/latest", response_model=list[TileLocation])
 async def latest_locations(request: Request) -> list[TileLocation]:
     history_store = request.app.state.history_store
-    return await asyncio.to_thread(history_store.get_latest_locations)
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(history_store.get_latest_locations),
+            timeout=HISTORY_IO_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        return []
 
 
 @router.get("/tiles/{tile_uuid}/history", response_model=TileHistoryResponse)

@@ -11,6 +11,16 @@ type TileStatusResponse = {
   detail: string;
 };
 
+async function fetchWithTimeout(input: string, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { signal: controller.signal });
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
 export function useSystemStatus(baseUrl: string) {
   const [backendConnected, setBackendConnected] = useState(false);
   const [homeAssistantConnected, setHomeAssistantConnected] = useState(false);
@@ -27,21 +37,27 @@ export function useSystemStatus(baseUrl: string) {
 
     const refresh = async () => {
       try {
-        const [healthResponse, tileStatusResponse] = await Promise.all([
-          fetch(`${normalizedBaseUrl}/health`),
-          fetch(`${normalizedBaseUrl}/debug/tile-status`),
-        ]);
-
+        const healthResponse = await fetchWithTimeout(`${normalizedBaseUrl}/health`, 4000);
         const health = (await healthResponse.json()) as HealthResponse;
-        const tileStatus = (await tileStatusResponse.json()) as TileStatusResponse;
 
         if (cancelled) {
           return;
         }
 
         setBackendConnected(healthResponse.ok && health.status === "ok");
-        setHomeAssistantConnected(tileStatusResponse.ok && tileStatus.ok);
-        setTileCount(tileStatus.tile_count ?? 0);
+
+        try {
+          const tileStatusResponse = await fetchWithTimeout(`${normalizedBaseUrl}/debug/tile-status`, 5000);
+          const tileStatus = (await tileStatusResponse.json()) as TileStatusResponse;
+          if (!cancelled) {
+            setHomeAssistantConnected(tileStatusResponse.ok && tileStatus.ok);
+            setTileCount(tileStatus.tile_count ?? 0);
+          }
+        } catch {
+          if (!cancelled) {
+            setHomeAssistantConnected(false);
+          }
+        }
       } catch {
         if (!cancelled) {
           setBackendConnected(false);

@@ -25,13 +25,17 @@ type TileSocketSession = {
 };
 
 async function fetchLatestLocations(baseUrl: string): Promise<TileLocation[]> {
-  const response = await fetch(`${baseUrl}/locations/latest`);
-  if (!response.ok) {
+  try {
+    const response = await fetch(`${baseUrl}/locations/latest`);
+    if (!response.ok) {
+      return [];
+    }
+
+    const payload = (await response.json()) as TileLocation[];
+    return Array.isArray(payload) ? payload : [];
+  } catch {
     return [];
   }
-
-  const payload = (await response.json()) as TileLocation[];
-  return Array.isArray(payload) ? payload : [];
 }
 
 function parseLocationMessage(payload: string): TileLocation[] | null {

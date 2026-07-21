@@ -17,6 +17,7 @@ from src.services.ws_manager import WebSocketManager
 LOGGER = logging.getLogger(__name__)
 settings = get_settings()
 app = FastAPI(title=settings.app_name)
+WS_INITIAL_SNAPSHOT_TIMEOUT_SECONDS = 3
 
 # Parse CORS origins - supports both "*" and comma-separated list
 cors_origins = [origin.strip() for origin in settings.backend_cors_origins.split(",") if origin.strip()]
@@ -88,7 +89,13 @@ async def locations_ws(websocket: WebSocket) -> None:
         # Send the latest stored locations immediately so the UI does not wait for the next poll.
         now = datetime.now().strftime("%H:%M:%S")
         print(f"[{now}] === WS: Sending initial latest locations message", flush=True)
-        latest_locations = await asyncio.to_thread(history_store.get_latest_locations)
+        try:
+            latest_locations = await asyncio.wait_for(
+                asyncio.to_thread(history_store.get_latest_locations),
+                timeout=WS_INITIAL_SNAPSHOT_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            latest_locations = []
         await websocket.send_json({
             "type": "tile_locations",
             "items": jsonable_encoder(latest_locations),
