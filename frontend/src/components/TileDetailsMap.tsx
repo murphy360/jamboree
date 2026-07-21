@@ -16,6 +16,7 @@ type TileDetailsMapProps = {
   dwellClusters: TileDwellCluster[];
   customAreas?: CustomArea[];
   selectedHotspot?: SelectedHotspot | null;
+  showGisLayers?: boolean;
 };
 
 const DEFAULT_CENTER: [number, number] = [38.076, -81.073];
@@ -70,7 +71,7 @@ function DwellClusterMarkers({ clusters, maxMinutes }: { clusters: TileDwellClus
   );
 }
 
-export function TileDetailsMap({ history, dwellClusters, customAreas = [], selectedHotspot }: TileDetailsMapProps) {
+export function TileDetailsMap({ history, dwellClusters, customAreas = [], selectedHotspot, showGisLayers = true }: TileDetailsMapProps) {
   const path = history.map((item) => [item.latitude, item.longitude] as [number, number]);
   const start = history[0];
   const end = history[history.length - 1];
@@ -96,7 +97,7 @@ export function TileDetailsMap({ history, dwellClusters, customAreas = [], selec
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <ArcGISLayers showNSJRegions={true} />
+        {showGisLayers ? <ArcGISLayers showNSJRegions={true} showSummitLakes={true} /> : null}
         {path.length > 1 ? <Polyline positions={path} pathOptions={{ color: "#0f766e", weight: 3 }} /> : null}
         {start ? (
           <CircleMarker

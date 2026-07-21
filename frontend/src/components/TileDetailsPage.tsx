@@ -13,6 +13,7 @@ type TileDetailsPageProps = {
   baseUrl: string;
   tileUuid: string;
   onRefreshDetails: () => void;
+  showGisLayers: boolean;
 };
 
 type DailyBreakdownProps = {
@@ -26,6 +27,7 @@ type DetailsContentProps = {
   baseUrl: string;
   tileUuid: string;
   onRefreshDetails: () => void;
+  showGisLayers: boolean;
 };
 
 type CreateAreaOptions = {
@@ -56,7 +58,7 @@ function formatMinutes(value: number): string {
   return `${hours} hr ${minutes} min`;
 }
 
-export function TileDetailsPage({ details, loading, onBack, onTrackerRemoved, baseUrl, tileUuid, onRefreshDetails }: TileDetailsPageProps) {
+export function TileDetailsPage({ details, loading, onBack, onTrackerRemoved, baseUrl, tileUuid, onRefreshDetails, showGisLayers }: TileDetailsPageProps) {
   if (loading) {
     return (
       <section className="tile-details-panel">
@@ -87,6 +89,7 @@ export function TileDetailsPage({ details, loading, onBack, onTrackerRemoved, ba
       baseUrl={baseUrl}
       tileUuid={tileUuid}
       onRefreshDetails={onRefreshDetails}
+      showGisLayers={showGisLayers}
     />
   );
 }
@@ -110,7 +113,7 @@ function DailyBreakdown({ details }: DailyBreakdownProps) {
 }
 
 
-function DetailsContent({ details, onBack, onTrackerRemoved, baseUrl, tileUuid, onRefreshDetails }: DetailsContentProps) {
+function DetailsContent({ details, onBack, onTrackerRemoved, baseUrl, tileUuid, onRefreshDetails, showGisLayers }: DetailsContentProps) {
   const [selectedHotspot, setSelectedHotspot] = useState<SelectedHotspot | null>(null);
   const [deletePending, setDeletePending] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -201,6 +204,7 @@ function DetailsContent({ details, onBack, onTrackerRemoved, baseUrl, tileUuid, 
         dwellClusters={details.dwell_clusters}
         customAreas={details.custom_areas}
         selectedHotspot={selectedHotspot}
+        showGisLayers={showGisLayers}
       />
 
       <div className="tile-details-grids">

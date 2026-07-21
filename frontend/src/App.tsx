@@ -15,6 +15,7 @@ export function App() {
   const { backendConnected, homeAssistantConnected, tileCount } = useSystemStatus(BACKEND_URL);
   const [detailsTileUuid, setDetailsTileUuid] = useState<string | null>(null);
   const [detailsRefreshKey, setDetailsRefreshKey] = useState(0);
+  const [showGisLayers, setShowGisLayers] = useState(true);
   const { details, loading: detailsLoading } = useTileDetails(BACKEND_URL, detailsTileUuid, detailsRefreshKey);
   const handleRefreshDetails = useCallback(() => setDetailsRefreshKey((k) => k + 1), []);
 
@@ -47,6 +48,16 @@ export function App() {
         <p>
           Active Tiles: <strong>{tileCount || locations.length}</strong>
         </p>
+        <p className="map-layer-toggle-row">
+          GIS Layers: <strong>{showGisLayers ? "On" : "Off"}</strong>
+          <button
+            type="button"
+            className="map-layer-toggle"
+            onClick={() => setShowGisLayers((current) => !current)}
+          >
+            {showGisLayers ? "Hide GIS" : "Show GIS"}
+          </button>
+        </p>
       </header>
 
       {detailsTileUuid ? (
@@ -58,9 +69,15 @@ export function App() {
           baseUrl={BACKEND_URL}
           tileUuid={detailsTileUuid}
           onRefreshDetails={handleRefreshDetails}
+          showGisLayers={showGisLayers}
         />
       ) : (
-        <LiveTrackerView backendUrl={BACKEND_URL} locations={locations} onOpenDetails={handleOpenDetails} />
+        <LiveTrackerView
+          backendUrl={BACKEND_URL}
+          locations={locations}
+          onOpenDetails={handleOpenDetails}
+          showGisLayers={showGisLayers}
+        />
       )}
     </main>
   );

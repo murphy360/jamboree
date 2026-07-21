@@ -18,6 +18,7 @@ type LiveTrackerViewProps = {
   backendUrl: string;
   locations: TileLocation[];
   onOpenDetails: (tileUuid: string) => void;
+  showGisLayers: boolean;
 };
 
 type TileListMode = "all" | "areas" | "moving" | "leaderboard";
@@ -308,7 +309,7 @@ function CollapsibleAreaSorting({
   );
 }
 
-export function LiveTrackerView({ backendUrl, locations, onOpenDetails }: LiveTrackerViewProps) {
+export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisLayers }: LiveTrackerViewProps) {
   const [tileListMode, setTileListMode] = useState<TileListMode>("all");
   const [collapsedAreas, setCollapsedAreas] = useState<Record<string, boolean>>({});
   const currentTimeMs = Date.now();
@@ -387,6 +388,7 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails }: LiveTr
         onTileClick={() => {}}
         onMapClick={() => {}}
         onDrawPolygon={handleDrawPolygon}
+        showGisLayers={showGisLayers}
       />
 
       <div className="tabs">

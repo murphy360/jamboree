@@ -21,6 +21,7 @@ type LiveMapProps = {
   breadcrumbColor?: string;
   tileColorByUuid?: Record<string, string>;
   fitSignal?: number;
+  showGisLayers?: boolean;
 };
 
 const DEFAULT_CENTER: [number, number] = [38.076, -81.073];
@@ -199,6 +200,7 @@ export function LiveMap({
   breadcrumbColor,
   tileColorByUuid,
   fitSignal = 0,
+  showGisLayers = true,
 }: LiveMapProps) {
   const selected = findSelectedTile(locations, selectedTileUuid);
   const selectedMarkerColor = getSelectedMarkerColor(selected, tileColorByUuid);
@@ -221,7 +223,7 @@ export function LiveMap({
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <ArcGISLayers showNSJRegions={true} />
+        {showGisLayers ? <ArcGISLayers showNSJRegions={true} showSummitLakes={true} /> : null}
         <AreaPolygons areas={areas ?? []} visibleLabels={visibleAreaLabels} onToggleLabel={toggleAreaLabel} />
         <BreadcrumbOverlay breadcrumbs={breadcrumbs} color={breadcrumbColor} />
         <TileMarkers
