@@ -84,20 +84,25 @@ class CreateAreaRequest(BaseModel):
     merge_into_area_id: str | None = None
 
 
-class GisLayerImportRequest(BaseModel):
-    layer_name: str
-    service_url: str
+class MapFeature(BaseModel):
+    id: str | None = None
     tile_uuid: str = "global"
-    layer_index: int = 0
+    name: str
+    folder_name: str | None = None
+    geometry_type: str
+    geometry: list | dict
+    source_type: str = "manual"
+    source_name: str | None = None
+    source_url: str | None = None
+    source_feature_id: str | None = None
 
 
-class GisLayerImportResponse(BaseModel):
-    layer_name: str
-    service_url: str
+class MyMapsSyncResponse(BaseModel):
+    source_url: str
     tile_uuid: str
-    imported: int
-    updated: int
-    skipped: int
+    folders_scanned: int
+    polygons_imported: int
+    features_imported: int
 
 
 class LeaderboardEntry(BaseModel):

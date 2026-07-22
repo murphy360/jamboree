@@ -370,6 +370,35 @@ class AreaStore:
             self._connection.commit()
         return cursor.rowcount
 
+    def delete_areas_by_source(
+        self,
+        tile_uuid: str,
+        source_type: str,
+        source_url: str,
+    ) -> int:
+        with self._lock:
+            cursor = self._connection.execute(
+                """
+                DELETE FROM custom_areas
+                WHERE tile_uuid = ? AND source_type = ? AND source_url = ?
+                """,
+                (tile_uuid, source_type, source_url),
+            )
+            self._connection.commit()
+        return cursor.rowcount
+
+    def delete_non_manual_areas(self, tile_uuid: str) -> int:
+        with self._lock:
+            cursor = self._connection.execute(
+                """
+                DELETE FROM custom_areas
+                WHERE tile_uuid = ? AND COALESCE(source_type, 'manual') != 'manual'
+                """,
+                (tile_uuid,),
+            )
+            self._connection.commit()
+        return cursor.rowcount
+
     # ------------------------------------------------------------------
     # Stats computation
     # ------------------------------------------------------------------

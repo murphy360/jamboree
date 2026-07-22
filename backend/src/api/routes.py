@@ -6,15 +6,14 @@ from src.core.settings import HealthResponse, TileStatusResponse, get_settings
 from src.services.models import (
     CreateAreaRequest,
     CustomArea,
-    GisLayerImportRequest,
-    GisLayerImportResponse,
     LeaderboardResponse,
+    MapFeature,
+    MyMapsSyncResponse,
     TileLocation,
     TileDetailsResponse,
     TileHistoryResponse,
     UpdateAreaRequest,
 )
-from src.services.gis_importer import GisImporter
 
 router = APIRouter()
 HISTORY_IO_TIMEOUT_SECONDS = 3
@@ -153,28 +152,26 @@ async def create_area(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.post("/gis/import", response_model=GisLayerImportResponse)
-async def import_gis_layer(body: GisLayerImportRequest, request: Request) -> GisLayerImportResponse:
-    area_store = request.app.state.area_store
-    importer = GisImporter(area_store)
+@router.get("/map-features", response_model=list[MapFeature])
+async def map_features(request: Request, tile_uuid: str = Query(default="global")) -> list[MapFeature]:
+    feature_store = request.app.state.map_feature_store
+    return feature_store.list_features(tile_uuid=tile_uuid)
 
+
+@router.post("/imports/mymaps/sync", response_model=MyMapsSyncResponse)
+async def sync_mymaps(request: Request) -> MyMapsSyncResponse:
+    sync_service = request.app.state.mymaps_sync_service
     try:
-        result = await importer.import_arcgis_layer(
-            layer_name=body.layer_name,
-            service_url=body.service_url,
-            tile_uuid=body.tile_uuid,
-            layer_index=body.layer_index,
-        )
+        result = await sync_service.sync_once()
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"GIS import failed: {str(exc)[:280]}") from exc
+        raise HTTPException(status_code=502, detail=f"My Maps sync failed: {str(exc)[:280]}") from exc
 
-    return GisLayerImportResponse(
-        layer_name=result.layer_name,
-        service_url=result.service_url,
+    return MyMapsSyncResponse(
+        source_url=result.source_url,
         tile_uuid=result.tile_uuid,
-        imported=result.imported,
-        updated=result.updated,
-        skipped=result.skipped,
+        folders_scanned=result.folders_scanned,
+        polygons_imported=result.polygons_imported,
+        features_imported=result.features_imported,
     )
 
 

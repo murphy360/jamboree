@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     tile_dwell_merge_radius_meters: int = Field(default=50, ge=5, le=500)
     tile_area_hotspot_buffer_meters: int = Field(default=50, ge=0, le=500)
     backend_cors_origins: str = "*"
+    mymaps_import_enabled: bool = True
+    mymaps_import_tile_uuid: str = "global"
+    mymaps_kml_url: str = (
+        "https://www.google.com/maps/d/kml?mid=1ZZEHtl-b2MjqlONDJMxWRzS0y3AzSqI&forcekml=1"
+    )
+    mymaps_import_interval_seconds: int = Field(default=900, ge=60, le=86400)
 
 
 class HealthResponse(BaseModel):
