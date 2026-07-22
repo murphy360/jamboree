@@ -15,12 +15,19 @@ type TileDetailsPayload = {
 
 type HotspotRow = {
   id: string;
-  tileUuid: string;
-  tileLabel: string;
   latitude: number;
   longitude: number;
-  minutesSpent: number;
-  samples: number;
+  totalMinutesSpent: number;
+  totalScoutPoints: number;
+  scoutCount: number;
+};
+
+type AggregatedHotspot = {
+  latitudeSum: number;
+  longitudeSum: number;
+  totalMinutesSpent: number;
+  totalScoutPoints: number;
+  scoutIds: Set<string>;
 };
 
 function formatMinutes(value: number): string {
@@ -69,26 +76,49 @@ export function TopHotspotsPanel({ backendUrl, locations }: TopHotspotsPanelProp
           }),
         );
 
-        const ranked = responses
+        const grouped = new Map<string, AggregatedHotspot>();
+
+        responses
           .filter((payload): payload is TileDetailsPayload => payload !== null)
-          .flatMap((payload) =>
+          .forEach((payload) => {
             payload.dwell_clusters
-              .filter((cluster) => cluster.minutes_spent > 0)
-              .map((cluster) => ({
-                id: `${payload.tile_uuid}:${cluster.latitude.toFixed(6)}:${cluster.longitude.toFixed(6)}`,
-                tileUuid: payload.tile_uuid,
-                tileLabel: payload.label,
-                latitude: cluster.latitude,
-                longitude: cluster.longitude,
-                minutesSpent: cluster.minutes_spent,
-                samples: cluster.samples,
-              })),
-          )
+              .filter((cluster) => cluster.samples > 0)
+              .forEach((cluster) => {
+                const key = `${cluster.latitude.toFixed(4)}:${cluster.longitude.toFixed(4)}`;
+                const current = grouped.get(key) ?? {
+                  latitudeSum: 0,
+                  longitudeSum: 0,
+                  totalMinutesSpent: 0,
+                  totalScoutPoints: 0,
+                  scoutIds: new Set<string>(),
+                };
+
+                current.latitudeSum += cluster.latitude;
+                current.longitudeSum += cluster.longitude;
+                current.totalMinutesSpent += cluster.minutes_spent;
+                current.totalScoutPoints += cluster.samples;
+                current.scoutIds.add(payload.tile_uuid);
+                grouped.set(key, current);
+              });
+          });
+
+        const ranked = [...grouped.entries()]
+          .map(([key, bucket]) => {
+            const count = bucket.scoutIds.size;
+            return {
+              id: key,
+              latitude: bucket.latitudeSum / count,
+              longitude: bucket.longitudeSum / count,
+              totalMinutesSpent: bucket.totalMinutesSpent,
+              totalScoutPoints: bucket.totalScoutPoints,
+              scoutCount: count,
+            } satisfies HotspotRow;
+          })
           .sort((a, b) => {
-            if (b.minutesSpent !== a.minutesSpent) {
-              return b.minutesSpent - a.minutesSpent;
+            if (b.totalScoutPoints !== a.totalScoutPoints) {
+              return b.totalScoutPoints - a.totalScoutPoints;
             }
-            return b.samples - a.samples;
+            return b.totalMinutesSpent - a.totalMinutesSpent;
           })
           .slice(0, 100);
 
@@ -123,14 +153,14 @@ export function TopHotspotsPanel({ backendUrl, locations }: TopHotspotsPanelProp
 
   return (
     <section className="leaderboard-panel">
-      <p className="tile-list-empty">Top hotspots ranked by all-time minutes spent.</p>
+      <p className="tile-list-empty">Top hotspots ranked by total scout points across all scouts.</p>
       <table className="leaderboard-table">
         <thead>
           <tr>
             <th>#</th>
-            <th>Tile</th>
-            <th>Time</th>
-            <th>Samples</th>
+            <th>Scout Points</th>
+            <th>Total Time</th>
+            <th>Scouts</th>
             <th>Coordinates</th>
           </tr>
         </thead>
@@ -138,9 +168,9 @@ export function TopHotspotsPanel({ backendUrl, locations }: TopHotspotsPanelProp
           {rows.map((row, index) => (
             <tr key={row.id}>
               <td className="leaderboard-rank">{index + 1}</td>
-              <td>{row.tileLabel}</td>
-              <td className="leaderboard-value">{formatMinutes(row.minutesSpent)}</td>
-              <td>{row.samples}</td>
+              <td>{row.totalScoutPoints}</td>
+              <td className="leaderboard-value">{formatMinutes(row.totalMinutesSpent)}</td>
+              <td>{row.scoutCount}</td>
               <td>
                 {row.latitude.toFixed(5)}, {row.longitude.toFixed(5)}
               </td>
