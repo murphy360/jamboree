@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTileHistory } from "../hooks/useTileHistory";
 import { useCustomAreas } from "../hooks/useCustomAreas";
+import { useMapFeatures } from "../hooks/useMapFeatures";
 import type { TileLocation } from "../hooks/useTileLocations";
 import type { AreaPolygonPoint, CustomArea } from "../hooks/useTileDetails";
 import {
@@ -313,6 +314,7 @@ function CollapsibleAreaSorting({
 export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisLayers }: LiveTrackerViewProps) {
   const [tileListMode, setTileListMode] = useState<TileListMode>("all");
   const [collapsedAreas, setCollapsedAreas] = useState<Record<string, boolean>>({});
+  const [showNamedPoints, setShowNamedPoints] = useState(false);
   const currentTimeMs = Date.now();
 
   const toggleAreaCollapse = (areaId: string) => {
@@ -327,6 +329,7 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
     tileUuid: "global", // Placeholder UUID to fetch global areas
     onRefresh: () => {},
   });
+  const { points: importedPoints } = useMapFeatures(backendUrl, "global");
 
   const handleDrawPolygon = useCallback(
     async (points: AreaPolygonPoint[]) => {
@@ -380,6 +383,8 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
     return { groups, unassigned };
   }, [sortedTiles, areas]);
 
+  const areaEditorPoints = tileListMode === "area-editor" && showNamedPoints ? importedPoints : [];
+
   return (
     <div className="live-tracker-view">
       <LiveMap
@@ -390,6 +395,7 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
         onMapClick={() => {}}
         onDrawPolygon={tileListMode === "area-editor" ? handleDrawPolygon : undefined}
         showGisLayers={showGisLayers}
+        importedPoints={areaEditorPoints}
       />
 
       <div className="tabs">
@@ -461,6 +467,14 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
           <p className="tile-list-empty">
             Draw a polygon directly on the map to create an area. Rename or delete existing areas below.
           </p>
+          <label className="area-editor-toggle">
+            <input
+              type="checkbox"
+              checked={showNamedPoints}
+              onChange={(event) => setShowNamedPoints(event.target.checked)}
+            />
+            <span>Show imported points with human-readable names ({importedPoints.length})</span>
+          </label>
           <CustomAreasPanel areas={areas} onRename={renameArea} onDelete={deleteArea} />
         </section>
       )}

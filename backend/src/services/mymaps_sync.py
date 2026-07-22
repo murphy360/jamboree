@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import uuid
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -16,6 +17,7 @@ LOGGER = logging.getLogger(__name__)
 KML_NS = {"kml": "http://www.opengis.net/kml/2.2"}
 POLYGON_SOURCE_TYPE = "mymaps_kml_polygon"
 FEATURE_SOURCE_TYPE = "mymaps_kml_feature"
+DESCRIPTION_NAME_KEYS = ("Location", "NAME", "Name", "LABEL", "Label", "TITLE", "Title")
 
 
 @dataclass(frozen=True)
@@ -119,6 +121,7 @@ class MyMapsSyncService:
                             placemark=placemark,
                             folder_name=folder_name,
                             feature_name=name,
+                            description=description,
                             source_feature_id=source_feature_id,
                         )
                     )
@@ -178,9 +181,11 @@ class MyMapsSyncService:
         placemark: ET.Element,
         folder_name: str,
         feature_name: str,
+        description: str,
         source_feature_id: str,
     ) -> list[MapFeature]:
         features: list[MapFeature] = []
+        resolved_name = self._resolve_feature_name(feature_name, description)
 
         for point in placemark.findall("kml:Point", KML_NS):
             coords = self._coordinates_text(point.find("kml:coordinates", KML_NS))
@@ -189,6 +194,7 @@ class MyMapsSyncService:
                 features.append(
                     self._feature(
                         name=feature_name,
+                        resolved_name=resolved_name,
                         folder_name=folder_name,
                         geometry_type="Point",
                         geometry={"coordinates": parsed[0]},
@@ -203,6 +209,7 @@ class MyMapsSyncService:
                 features.append(
                     self._feature(
                         name=feature_name,
+                        resolved_name=resolved_name,
                         folder_name=folder_name,
                         geometry_type="LineString",
                         geometry={"coordinates": parsed},
@@ -217,6 +224,7 @@ class MyMapsSyncService:
                 features.append(
                     self._feature(
                         name=feature_name,
+                        resolved_name=resolved_name,
                         folder_name=folder_name,
                         geometry_type="LineString",
                         geometry={"coordinates": parsed},
@@ -229,13 +237,14 @@ class MyMapsSyncService:
     def _feature(
         self,
         name: str,
+        resolved_name: str,
         folder_name: str,
         geometry_type: str,
         geometry: dict,
         source_feature_id: str,
     ) -> MapFeature:
         return MapFeature(
-            name=name,
+            name=resolved_name,
             tile_uuid=self._tile_uuid,
             folder_name=folder_name,
             geometry_type=geometry_type,
@@ -245,6 +254,31 @@ class MyMapsSyncService:
             source_url=self._kml_url,
             source_feature_id=source_feature_id,
         )
+
+    def _resolve_feature_name(self, feature_name: str, description: str) -> str:
+        stripped = feature_name.strip()
+        if stripped and not stripped.isdigit() and not stripped.lower().startswith("feature"):
+            return stripped
+
+        extracted = self._extract_name_from_description(description)
+        if extracted:
+            return extracted
+
+        return stripped or "Unnamed Feature"
+
+    def _extract_name_from_description(self, description: str) -> str | None:
+        if not description:
+            return None
+
+        for key in DESCRIPTION_NAME_KEYS:
+            pattern = rf"{re.escape(key)}\s*:\s*([^<\n]+)"
+            match = re.search(pattern, description)
+            if match:
+                value = match.group(1).strip()
+                if value:
+                    return value
+
+        return None
 
     def _polygon_points(self, polygon: ET.Element) -> list[AreaPolygonPoint]:
         coords = self._coordinates_text(

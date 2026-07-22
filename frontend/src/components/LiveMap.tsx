@@ -1,12 +1,13 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { Polygon as LeafletPolygon } from "leaflet";
-import { CircleMarker, FeatureGroup, MapContainer, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { CircleMarker, FeatureGroup, MapContainer, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { AreaPolygons } from "./AreaPolygons";
 import { ArcGISLayers } from "./ArcGISLayers";
 import { TileMarkers } from "./TileMarkers";
 import type { TileLocation } from "../hooks/useTileLocations";
 import type { AreaPolygonPoint, CustomArea } from "../hooks/useTileDetails";
+import type { ImportedMapPoint } from "../hooks/useMapFeatures";
 import { EditControl } from "react-leaflet-draw";
 import "leaflet-draw/dist/leaflet.draw.css";
 
@@ -22,6 +23,7 @@ type LiveMapProps = {
   tileColorByUuid?: Record<string, string>;
   fitSignal?: number;
   showGisLayers?: boolean;
+  importedPoints?: ImportedMapPoint[];
 };
 
 const DEFAULT_CENTER: [number, number] = [38.076, -81.073];
@@ -126,6 +128,29 @@ function BreadcrumbOverlay({ breadcrumbs, color }: { breadcrumbs?: TileLocation[
   return <Breadcrumbs points={breadcrumbs} color={color || "#0f766e"} />;
 }
 
+function ImportedPointsOverlay({ points }: { points: ImportedMapPoint[] }) {
+  if (points.length === 0) {
+    return null;
+  }
+
+  return (
+    <>
+      {points.map((point) => (
+        <CircleMarker
+          key={point.id}
+          center={[point.latitude, point.longitude]}
+          radius={5}
+          pathOptions={{ color: "#b45309", fillColor: "#f59e0b", fillOpacity: 0.8, weight: 1.5 }}
+        >
+          <Tooltip direction="top" offset={[0, -8]}>
+            {point.name}
+          </Tooltip>
+        </CircleMarker>
+      ))}
+    </>
+  );
+}
+
 function toPolygonPoints(layer: LeafletPolygon): AreaPolygonPoint[] {
   const latLngs = layer.getLatLngs();
   const firstRing = Array.isArray(latLngs[0]) ? latLngs[0] : latLngs;
@@ -201,6 +226,7 @@ export function LiveMap({
   tileColorByUuid,
   fitSignal = 0,
   showGisLayers = true,
+  importedPoints = [],
 }: LiveMapProps) {
   const selected = findSelectedTile(locations, selectedTileUuid);
   const selectedMarkerColor = getSelectedMarkerColor(selected, tileColorByUuid);
@@ -226,6 +252,7 @@ export function LiveMap({
         {showGisLayers ? <ArcGISLayers showNSJRegions={true} showSummitLakes={true} /> : null}
         <AreaPolygons areas={areas ?? []} visibleLabels={visibleAreaLabels} onToggleLabel={toggleAreaLabel} />
         <BreadcrumbOverlay breadcrumbs={breadcrumbs} color={breadcrumbColor} />
+        <ImportedPointsOverlay points={importedPoints} />
         <TileMarkers
           locations={locations}
           selectedTileUuid={selectedTileUuid}
