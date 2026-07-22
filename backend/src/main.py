@@ -11,6 +11,8 @@ from src.services.area_store import AreaStore
 from src.services.home_assistant_client import HomeAssistantTileClient
 from src.services.history_store import TileHistoryStore
 from src.services.leaderboard_store import LeaderboardStore
+from src.services.map_feature_store import MapFeatureStore
+from src.services.mymaps_sync import MyMapsSyncService
 from src.services.poller import TilePoller
 from src.services.ws_manager import WebSocketManager
 
@@ -47,28 +49,48 @@ tile_client = HomeAssistantTileClient(
 app.state.tile_client = tile_client
 app.state.history_store = history_store
 app.state.area_store = AreaStore(db_path=settings.tile_history_db_path)
+app.state.map_feature_store = MapFeatureStore(db_path=settings.tile_history_db_path)
 app.state.leaderboard_store = LeaderboardStore(
     history_store=history_store,
     area_store=app.state.area_store,
 )
 poller = TilePoller(tile_client, ws_manager, history_store, settings.tile_poll_interval_seconds)
 app.state.poller = poller
+mymaps_sync_service = MyMapsSyncService(
+    area_store=app.state.area_store,
+    map_feature_store=app.state.map_feature_store,
+    kml_url=settings.mymaps_kml_url,
+    tile_uuid=settings.mymaps_import_tile_uuid,
+    interval_seconds=settings.mymaps_import_interval_seconds,
+    enabled=settings.mymaps_import_enabled,
+)
+app.state.mymaps_sync_service = mymaps_sync_service
 poller_task: asyncio.Task | None = None
+mymaps_sync_task: asyncio.Task | None = None
 
 
 @app.on_event("startup")
 async def startup() -> None:
-    global poller_task
+    global poller_task, mymaps_sync_task
     print(f"=== STARTUP: Starting poller with interval: {settings.tile_poll_interval_seconds}s")
     print(f"=== STARTUP: Home Assistant URL: {settings.home_assistant_url}")
     print(f"=== STARTUP: Require hash: {settings.home_assistant_require_hash}")
     print(f"=== STARTUP: Tile entities filter: {settings.home_assistant_tile_entities}")
     poller_task = asyncio.create_task(poller.run())
     print("=== STARTUP: Poller task started")
+    if settings.mymaps_import_enabled:
+        print(
+            "=== STARTUP: My Maps sync enabled "
+            f"interval={settings.mymaps_import_interval_seconds}s"
+        )
+        mymaps_sync_task = asyncio.create_task(mymaps_sync_service.run())
 
 
 @app.on_event("shutdown")
 async def shutdown() -> None:
+    if mymaps_sync_task:
+        await mymaps_sync_service.stop()
+        mymaps_sync_task.cancel()
     if poller_task:
         await poller.stop()
         poller_task.cancel()
