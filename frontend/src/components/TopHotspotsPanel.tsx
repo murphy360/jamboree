@@ -50,10 +50,13 @@ export function TopHotspotsPanel({ backendUrl, locations, onSelectHotspot }: Top
     [backendUrl],
   );
 
-  const tileIds = useMemo(
-    () => Array.from(new Set(locations.map((location) => location.tile_uuid))),
-    [locations],
-  );
+  const tileIds = useMemo(() => {
+    const unique = Array.from(new Set(locations.map((location) => location.tile_uuid)));
+    unique.sort();
+    return unique;
+  }, [locations]);
+
+  const tileIdsKey = useMemo(() => tileIds.join("|"), [tileIds]);
 
   useEffect(() => {
     if (!normalizedBaseUrl || tileIds.length === 0) {
@@ -142,7 +145,7 @@ export function TopHotspotsPanel({ backendUrl, locations, onSelectHotspot }: Top
     return () => {
       cancelled = true;
     };
-  }, [normalizedBaseUrl, tileIds]);
+  }, [normalizedBaseUrl, tileIdsKey]);
 
   if (loading) {
     return <p className="tile-list-empty">Loading hotspots...</p>;
