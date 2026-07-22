@@ -35,6 +35,9 @@ class TilePoller:
     def get_cached_latest_locations(self) -> list[TileLocation]:
         return list(self._latest_cache)
 
+    def clear_cached_latest_locations(self) -> None:
+        self._latest_cache = []
+
     async def stop(self) -> None:
         self._shutdown.set()
 

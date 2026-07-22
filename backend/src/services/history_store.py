@@ -381,6 +381,13 @@ class TileHistoryStore:
             self._connection.commit()
         return cursor.rowcount
 
+    def delete_all_history(self) -> int:
+        """Delete all tracker history rows and return deleted row count."""
+        with self._lock:
+            cursor = self._connection.execute("DELETE FROM tile_history")
+            self._connection.commit()
+        return cursor.rowcount
+
     def close(self) -> None:
         with self._lock:
             self._connection.close()
