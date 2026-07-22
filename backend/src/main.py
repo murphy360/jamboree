@@ -94,6 +94,7 @@ async def shutdown() -> None:
     if poller_task:
         await poller.stop()
         poller_task.cancel()
+    app.state.map_feature_store.close()
     history_store.close()
 
 

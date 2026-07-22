@@ -61,7 +61,7 @@ class LeaderboardStore:
         return self._compute_named_area_time_entries(
             tile_ids=tile_ids,
             date=date,
-            matcher=lambda area_name: "camp" in area_name,
+            matcher=self._is_camp_area,
         )
 
     def _compute_patch_trading_time_entries(
@@ -110,3 +110,9 @@ class LeaderboardStore:
         if "patch trading" in area_name:
             return True
         return "patch" in area_name and ("trade" in area_name or "trading" in area_name)
+
+    def _is_camp_area(self, area_name: str) -> bool:
+        # Explicitly include Subcamp C1 in camp-time leaderboard classification.
+        if "subcamp c1" in area_name:
+            return True
+        return "camp" in area_name

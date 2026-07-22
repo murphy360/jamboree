@@ -126,6 +126,10 @@ class MapFeatureStore:
             self._connection.commit()
         return cursor.rowcount
 
+    def close(self) -> None:
+        with self._lock:
+            self._connection.close()
+
     def _row_to_feature(self, row: sqlite3.Row) -> MapFeature:
         return MapFeature(
             id=row["id"],

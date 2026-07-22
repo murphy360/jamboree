@@ -28,12 +28,25 @@ Set these values in `backend/.env`:
 - `TILE_HISTORY_DB_PATH` (`/app/data/tile_history.db` by default; persisted to `backend/data` via Docker volume)
 - `TILE_HISTORY_MAX_POINTS_PER_TILE` (`0` by default for unlimited retention; set a positive value to cap stored points per tile)
 - `TILE_DWELL_MERGE_RADIUS_METERS` (`50` by default; merges nearby dwell hotspots into one cluster)
+- `MYMAPS_IMPORT_ENABLED` (`true` by default; enables Google My Maps KML sync)
+- `MYMAPS_KML_URL` (KML feed URL used for imports)
+- `MYMAPS_IMPORT_TILE_UUID` (`global` by default)
+- `MYMAPS_IMPORT_INTERVAL_SECONDS` (`900` by default; sync interval in seconds)
 
 Tile details endpoint supports runtime override for hotspot merge distance:
 - `GET /tiles/{tile_uuid}/details?dwell_merge_meters=50`
 
 Remove a tracker and all locally stored history/custom areas:
 - `DELETE /tiles/{tile_uuid}`
+
+Google My Maps import behavior:
+- Runs automatically on backend startup.
+- Re-runs periodically based on `MYMAPS_IMPORT_INTERVAL_SECONDS`.
+- Replaces previously imported non-manual geometries while keeping manual areas intact.
+
+Import-related endpoints:
+- `POST /imports/mymaps/sync` triggers an immediate KML sync.
+- `GET /map-features?tile_uuid=global` returns imported non-polygon map features (points/lines).
 
 If `HOME_ASSISTANT_TILE_ENTITIES` is empty, backend auto-discovers Tile trackers by scanning `device_tracker.*` entities that include `tile` in entity id or friendly name.
 
