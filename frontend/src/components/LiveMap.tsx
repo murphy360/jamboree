@@ -142,7 +142,7 @@ function ImportedPointsOverlay({ points }: { points: ImportedMapPoint[] }) {
           radius={5}
           pathOptions={{ color: "#b45309", fillColor: "#f59e0b", fillOpacity: 0.8, weight: 1.5 }}
         >
-          <Tooltip direction="top" offset={[0, -8]}>
+          <Tooltip permanent direction="top" offset={[0, -8]} className="imported-point-label">
             {point.name}
           </Tooltip>
         </CircleMarker>
