@@ -119,7 +119,6 @@ class MyMapsSyncService:
                             placemark=placemark,
                             folder_name=folder_name,
                             feature_name=name,
-                            description=description,
                             source_feature_id=source_feature_id,
                         )
                     )
@@ -179,7 +178,6 @@ class MyMapsSyncService:
         placemark: ET.Element,
         folder_name: str,
         feature_name: str,
-        description: str,
         source_feature_id: str,
     ) -> list[MapFeature]:
         features: list[MapFeature] = []
@@ -194,7 +192,6 @@ class MyMapsSyncService:
                         folder_name=folder_name,
                         geometry_type="Point",
                         geometry={"coordinates": parsed[0]},
-                        description=description,
                         source_feature_id=f"{source_feature_id}:point",
                     )
                 )
@@ -209,7 +206,6 @@ class MyMapsSyncService:
                         folder_name=folder_name,
                         geometry_type="LineString",
                         geometry={"coordinates": parsed},
-                        description=description,
                         source_feature_id=f"{source_feature_id}:line",
                     )
                 )
@@ -224,7 +220,6 @@ class MyMapsSyncService:
                         folder_name=folder_name,
                         geometry_type="LineString",
                         geometry={"coordinates": parsed},
-                        description=description,
                         source_feature_id=f"{source_feature_id}:multiline:{len(features)}",
                     )
                 )
@@ -237,7 +232,6 @@ class MyMapsSyncService:
         folder_name: str,
         geometry_type: str,
         geometry: dict,
-        description: str,
         source_feature_id: str,
     ) -> MapFeature:
         return MapFeature(
@@ -247,7 +241,7 @@ class MyMapsSyncService:
             geometry_type=geometry_type,
             geometry=geometry,
             source_type=FEATURE_SOURCE_TYPE,
-            source_name=description or folder_name,
+            source_name=folder_name,
             source_url=self._kml_url,
             source_feature_id=source_feature_id,
         )
