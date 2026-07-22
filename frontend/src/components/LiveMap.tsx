@@ -26,6 +26,7 @@ type LiveMapProps = {
   importedPoints?: ImportedMapPoint[];
   focusedHotspot?: { latitude: number; longitude: number; label: string } | null;
   focusSignal?: number;
+  onFocusedHotspotHandled?: () => void;
 };
 
 const DEFAULT_CENTER: [number, number] = [38.076, -81.073];
@@ -38,6 +39,7 @@ type FitToLocationsProps = {
 type FocusHotspotProps = {
   focusedHotspot: { latitude: number; longitude: number; label: string } | null;
   focusSignal: number;
+  onHandled?: () => void;
 };
 
 function FitToLocations({ locations, fitSignal }: FitToLocationsProps) {
@@ -91,7 +93,7 @@ function MapClickHandler({ onMapClick }: MapClickHandlerProps) {
   return null;
 }
 
-function FocusHotspot({ focusedHotspot, focusSignal }: FocusHotspotProps) {
+function FocusHotspot({ focusedHotspot, focusSignal, onHandled }: FocusHotspotProps) {
   const map = useMap();
 
   useEffect(() => {
@@ -102,7 +104,8 @@ function FocusHotspot({ focusedHotspot, focusSignal }: FocusHotspotProps) {
     map.flyTo([focusedHotspot.latitude, focusedHotspot.longitude], Math.max(map.getZoom(), 17), {
       duration: 0.8,
     });
-  }, [focusedHotspot, focusSignal, map]);
+    onHandled?.();
+  }, [focusedHotspot, focusSignal, map, onHandled]);
 
   return null;
 }
@@ -252,6 +255,7 @@ export function LiveMap({
   importedPoints = [],
   focusedHotspot = null,
   focusSignal = 0,
+  onFocusedHotspotHandled,
 }: LiveMapProps) {
   const selected = findSelectedTile(locations, selectedTileUuid);
   const selectedMarkerColor = getSelectedMarkerColor(selected, tileColorByUuid);
@@ -269,7 +273,11 @@ export function LiveMap({
     <section className="map-frame">
       <MapContainer center={DEFAULT_CENTER} zoom={14} className="map-canvas">
         <FitToLocations locations={locations} fitSignal={fitSignal} />
-        <FocusHotspot focusedHotspot={focusedHotspot} focusSignal={focusSignal} />
+        <FocusHotspot
+          focusedHotspot={focusedHotspot}
+          focusSignal={focusSignal}
+          onHandled={onFocusedHotspotHandled}
+        />
         <MapClickHandler onMapClick={onMapClick} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'

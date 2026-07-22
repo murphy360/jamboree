@@ -399,6 +399,10 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
     setFocusSignal((value) => value + 1);
   }, []);
 
+  const handleFocusedHotspotHandled = useCallback(() => {
+    setFocusedHotspot(null);
+  }, []);
+
   return (
     <div className="live-tracker-view">
       <LiveMap
@@ -412,6 +416,7 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
         importedPoints={areaEditorPoints}
         focusedHotspot={focusedHotspot}
         focusSignal={focusSignal}
+        onFocusedHotspotHandled={handleFocusedHotspotHandled}
       />
 
       <div className="tabs">
