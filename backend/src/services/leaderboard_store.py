@@ -112,7 +112,5 @@ class LeaderboardStore:
         return "patch" in area_name and ("trade" in area_name or "trading" in area_name)
 
     def _is_camp_area(self, area_name: str) -> bool:
-        # Explicitly include Subcamp C1 in camp-time leaderboard classification.
-        if "subcamp c1" in area_name:
-            return True
-        return "camp" in area_name
+        # Camp leaderboard currently scopes only to Subcamp C1.
+        return area_name.strip() == "subcamp c1"

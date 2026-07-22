@@ -63,6 +63,7 @@ mymaps_sync_service = MyMapsSyncService(
     tile_uuid=settings.mymaps_import_tile_uuid,
     interval_seconds=settings.mymaps_import_interval_seconds,
     enabled=settings.mymaps_import_enabled,
+    polygon_exclude_prefixes=settings.mymaps_polygon_exclude_prefixes.split(","),
 )
 app.state.mymaps_sync_service = mymaps_sync_service
 poller_task: asyncio.Task | None = None

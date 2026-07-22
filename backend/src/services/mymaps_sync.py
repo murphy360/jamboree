@@ -38,6 +38,7 @@ class MyMapsSyncService:
         tile_uuid: str,
         interval_seconds: int,
         enabled: bool,
+        polygon_exclude_prefixes: list[str] | None = None,
     ) -> None:
         self._area_store = area_store
         self._map_feature_store = map_feature_store
@@ -45,6 +46,11 @@ class MyMapsSyncService:
         self._tile_uuid = tile_uuid
         self._interval_seconds = interval_seconds
         self._enabled = enabled
+        self._polygon_exclude_prefixes = [
+            prefix.strip().lower()
+            for prefix in (polygon_exclude_prefixes or [])
+            if prefix.strip()
+        ]
         self._shutdown = asyncio.Event()
         self._lock = asyncio.Lock()
 
@@ -92,6 +98,8 @@ class MyMapsSyncService:
                     polygons = self._extract_polygons(placemark)
                     for index, polygon in enumerate(polygons, start=1):
                         area_name = name if len(polygons) == 1 else f"{name} (part {index})"
+                        if self._should_skip_polygon_name(area_name):
+                            continue
                         source = ImportedAreaSource(
                             source_type=POLYGON_SOURCE_TYPE,
                             source_name=folder_name or "My Maps",
@@ -137,6 +145,13 @@ class MyMapsSyncService:
                 result.features_imported,
             )
             return result
+
+    def _should_skip_polygon_name(self, area_name: str) -> bool:
+        normalized = area_name.strip().lower()
+        for prefix in self._polygon_exclude_prefixes:
+            if normalized.startswith(prefix):
+                return True
+        return False
 
     async def _fetch_kml(self) -> bytes:
         async with httpx.AsyncClient(timeout=45) as client:

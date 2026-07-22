@@ -31,6 +31,7 @@ class Settings(BaseSettings):
         "https://www.google.com/maps/d/kml?mid=1ZZEHtl-b2MjqlONDJMxWRzS0y3AzSqI&forcekml=1"
     )
     mymaps_import_interval_seconds: int = Field(default=900, ge=60, le=86400)
+    mymaps_polygon_exclude_prefixes: str = "feature"
 
 
 class HealthResponse(BaseModel):
