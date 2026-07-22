@@ -26,6 +26,12 @@ type LiveTrackerViewProps = {
 
 type TileListMode = "all" | "areas" | "moving" | "hotspots" | "leaderboard" | "area-editor";
 
+type FocusedHotspot = {
+  latitude: number;
+  longitude: number;
+  label: string;
+};
+
 type AreaGroupedTileList = {
   area: CustomArea;
   entries: TileListEntry[];
@@ -316,6 +322,8 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
   const [tileListMode, setTileListMode] = useState<TileListMode>("all");
   const [collapsedAreas, setCollapsedAreas] = useState<Record<string, boolean>>({});
   const [showNamedPoints, setShowNamedPoints] = useState(true);
+  const [focusedHotspot, setFocusedHotspot] = useState<FocusedHotspot | null>(null);
+  const [focusSignal, setFocusSignal] = useState(0);
   const currentTimeMs = Date.now();
 
   const toggleAreaCollapse = (areaId: string) => {
@@ -386,6 +394,11 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
 
   const areaEditorPoints = tileListMode === "area-editor" && showNamedPoints ? importedPoints : [];
 
+  const handleSelectTopHotspot = useCallback((hotspot: FocusedHotspot) => {
+    setFocusedHotspot(hotspot);
+    setFocusSignal((value) => value + 1);
+  }, []);
+
   return (
     <div className="live-tracker-view">
       <LiveMap
@@ -397,6 +410,8 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
         onDrawPolygon={tileListMode === "area-editor" ? handleDrawPolygon : undefined}
         showGisLayers={showGisLayers}
         importedPoints={areaEditorPoints}
+        focusedHotspot={focusedHotspot}
+        focusSignal={focusSignal}
       />
 
       <div className="tabs">
@@ -467,7 +482,11 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
       )}
 
       {tileListMode === "hotspots" && (
-        <TopHotspotsPanel backendUrl={backendUrl} locations={locations} />
+        <TopHotspotsPanel
+          backendUrl={backendUrl}
+          locations={locations}
+          onSelectHotspot={handleSelectTopHotspot}
+        />
       )}
 
       {tileListMode === "leaderboard" && <LeaderboardPanel backendUrl={backendUrl} />}

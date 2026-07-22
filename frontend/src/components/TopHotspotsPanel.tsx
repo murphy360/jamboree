@@ -5,6 +5,7 @@ import type { TileDwellCluster } from "../hooks/useTileDetails";
 type TopHotspotsPanelProps = {
   backendUrl: string;
   locations: TileLocation[];
+  onSelectHotspot: (hotspot: { latitude: number; longitude: number; label: string }) => void;
 };
 
 type TileDetailsPayload = {
@@ -40,7 +41,7 @@ function formatMinutes(value: number): string {
   return minutes === 0 ? `${hours} hr` : `${hours} hr ${minutes} min`;
 }
 
-export function TopHotspotsPanel({ backendUrl, locations }: TopHotspotsPanelProps) {
+export function TopHotspotsPanel({ backendUrl, locations, onSelectHotspot }: TopHotspotsPanelProps) {
   const [rows, setRows] = useState<HotspotRow[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -166,7 +167,17 @@ export function TopHotspotsPanel({ backendUrl, locations }: TopHotspotsPanelProp
         </thead>
         <tbody>
           {rows.map((row, index) => (
-            <tr key={row.id}>
+            <tr
+              key={row.id}
+              className="top-hotspot-row"
+              onClick={() =>
+                onSelectHotspot({
+                  latitude: row.latitude,
+                  longitude: row.longitude,
+                  label: `Top Hotspot #${index + 1}`,
+                })
+              }
+            >
               <td className="leaderboard-rank">{index + 1}</td>
               <td>{row.totalScoutPoints}</td>
               <td className="leaderboard-value">{formatMinutes(row.totalMinutesSpent)}</td>

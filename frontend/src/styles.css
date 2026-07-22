@@ -745,3 +745,11 @@ body {
   border-radius: 0.3rem;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.18);
 }
+
+.top-hotspot-row {
+  cursor: pointer;
+}
+
+.top-hotspot-row:hover {
+  background: #f8fafc;
+}

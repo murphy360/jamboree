@@ -24,6 +24,8 @@ type LiveMapProps = {
   fitSignal?: number;
   showGisLayers?: boolean;
   importedPoints?: ImportedMapPoint[];
+  focusedHotspot?: { latitude: number; longitude: number; label: string } | null;
+  focusSignal?: number;
 };
 
 const DEFAULT_CENTER: [number, number] = [38.076, -81.073];
@@ -31,6 +33,11 @@ const DEFAULT_CENTER: [number, number] = [38.076, -81.073];
 type FitToLocationsProps = {
   locations: TileLocation[];
   fitSignal: number;
+};
+
+type FocusHotspotProps = {
+  focusedHotspot: { latitude: number; longitude: number; label: string } | null;
+  focusSignal: number;
 };
 
 function FitToLocations({ locations, fitSignal }: FitToLocationsProps) {
@@ -81,6 +88,22 @@ function MapClickHandler({ onMapClick }: MapClickHandlerProps) {
       onMapClick();
     },
   });
+  return null;
+}
+
+function FocusHotspot({ focusedHotspot, focusSignal }: FocusHotspotProps) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!focusedHotspot) {
+      return;
+    }
+
+    map.flyTo([focusedHotspot.latitude, focusedHotspot.longitude], Math.max(map.getZoom(), 17), {
+      duration: 0.8,
+    });
+  }, [focusedHotspot, focusSignal, map]);
+
   return null;
 }
 
@@ -227,6 +250,8 @@ export function LiveMap({
   fitSignal = 0,
   showGisLayers = true,
   importedPoints = [],
+  focusedHotspot = null,
+  focusSignal = 0,
 }: LiveMapProps) {
   const selected = findSelectedTile(locations, selectedTileUuid);
   const selectedMarkerColor = getSelectedMarkerColor(selected, tileColorByUuid);
@@ -244,6 +269,7 @@ export function LiveMap({
     <section className="map-frame">
       <MapContainer center={DEFAULT_CENTER} zoom={14} className="map-canvas">
         <FitToLocations locations={locations} fitSignal={fitSignal} />
+        <FocusHotspot focusedHotspot={focusedHotspot} focusSignal={focusSignal} />
         <MapClickHandler onMapClick={onMapClick} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -253,6 +279,17 @@ export function LiveMap({
         <AreaPolygons areas={areas ?? []} visibleLabels={visibleAreaLabels} onToggleLabel={toggleAreaLabel} />
         <BreadcrumbOverlay breadcrumbs={breadcrumbs} color={breadcrumbColor} />
         <ImportedPointsOverlay points={importedPoints} />
+        {focusedHotspot ? (
+          <CircleMarker
+            center={[focusedHotspot.latitude, focusedHotspot.longitude]}
+            radius={9}
+            pathOptions={{ color: "#0f172a", fillColor: "#facc15", fillOpacity: 0.92, weight: 2.5 }}
+          >
+            <Tooltip direction="top" offset={[0, -10]}>
+              {focusedHotspot.label}
+            </Tooltip>
+          </CircleMarker>
+        ) : null}
         <TileMarkers
           locations={locations}
           selectedTileUuid={selectedTileUuid}
