@@ -314,7 +314,7 @@ function CollapsibleAreaSorting({
 export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisLayers }: LiveTrackerViewProps) {
   const [tileListMode, setTileListMode] = useState<TileListMode>("all");
   const [collapsedAreas, setCollapsedAreas] = useState<Record<string, boolean>>({});
-  const [showNamedPoints, setShowNamedPoints] = useState(false);
+  const [showNamedPoints, setShowNamedPoints] = useState(true);
   const currentTimeMs = Date.now();
 
   const toggleAreaCollapse = (areaId: string) => {
