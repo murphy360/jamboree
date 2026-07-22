@@ -116,12 +116,12 @@ export function LeaderboardPanel({ backendUrl }: LeaderboardPanelProps) {
           </section>
 
           <section className="leaderboard-section">
-            <h3>Most Time in Camp</h3>
+            <h3>Most Time in Camp Subcamp C1</h3>
             <LeaderboardTable entries={data?.camp_time ?? []} metric="camp_time" />
           </section>
 
           <section className="leaderboard-section">
-            <h3>Most Time in Patch Trading</h3>
+            <h3>Most Time in Patch Trading ("patch trading" or patch+trade)</h3>
             <LeaderboardTable entries={data?.patch_trading_time ?? []} metric="patch_trading_time" />
           </section>
         </div>
