@@ -15,7 +15,7 @@ export function App() {
   const { backendConnected, homeAssistantConnected, tileCount } = useSystemStatus(BACKEND_URL);
   const [detailsTileUuid, setDetailsTileUuid] = useState<string | null>(null);
   const [detailsRefreshKey, setDetailsRefreshKey] = useState(0);
-  const showGisLayers = true;
+  const showGisLayers = false;
   const { details, loading: detailsLoading } = useTileDetails(BACKEND_URL, detailsTileUuid, detailsRefreshKey);
   const handleRefreshDetails = useCallback(() => setDetailsRefreshKey((k) => k + 1), []);
 
