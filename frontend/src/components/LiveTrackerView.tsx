@@ -24,7 +24,7 @@ type LiveTrackerViewProps = {
   showGisLayers: boolean;
 };
 
-type TileListMode = "all" | "areas" | "moving" | "hotspots" | "leaderboard" | "area-editor";
+type TileListMode = "all" | "stale" | "areas" | "moving" | "hotspots" | "leaderboard" | "area-editor";
 
 type FocusedHotspot = {
   latitude: number;
@@ -358,10 +358,23 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
     [createArea],
   );
 
+  const ageBandConfig = useMemo(() => getAgeBandConfig(), []);
+
   // Build sorted tile entries for "All Tiles" tab
   const sortedTiles = useMemo(
-    () => buildSortedTileEntries(locations, currentTimeMs, getAgeBandConfig()),
-    [locations, currentTimeMs]
+    () => buildSortedTileEntries(locations, currentTimeMs, ageBandConfig),
+    [locations, currentTimeMs, ageBandConfig]
+  );
+
+  const staleTiles = useMemo(
+    () =>
+      sortedTiles.filter((entry) => {
+        if (!Number.isFinite(entry.ageMs)) {
+          return true;
+        }
+        return entry.ageMs >= ageBandConfig.orangeAfterMinutes * 60_000;
+      }),
+    [sortedTiles, ageBandConfig.orangeAfterMinutes],
   );
 
   // Build tile color map
@@ -427,6 +440,12 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
           All Tiles
         </button>
         <button
+          className={tileListMode === "stale" ? "is-active" : ""}
+          onClick={() => setTileListMode("stale")}
+        >
+          Not Seen Recently
+        </button>
+        <button
           className={tileListMode === "areas" ? "is-active" : ""}
           onClick={() => setTileListMode("areas")}
         >
@@ -461,6 +480,15 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
       {tileListMode === "all" && (
         <TrackedTileList
           entries={sortedTiles}
+          selectedTileUuid={null}
+          onTileClick={() => {}}
+          onOpenDetails={onOpenDetails}
+        />
+      )}
+
+      {tileListMode === "stale" && (
+        <TrackedTileList
+          entries={staleTiles}
           selectedTileUuid={null}
           onTileClick={() => {}}
           onOpenDetails={onOpenDetails}
