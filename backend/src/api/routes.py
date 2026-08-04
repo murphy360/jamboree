@@ -19,6 +19,40 @@ from src.services.models import (
 router = APIRouter()
 HISTORY_IO_TIMEOUT_SECONDS = 3
 TILE_STATUS_TIMEOUT_SECONDS = 6
+GLOBAL_AREA_STATS_TIMEOUT_SECONDS = 8
+
+
+def _compute_global_area_stats(request: Request, areas: list[CustomArea]) -> list[CustomArea]:
+    if not areas:
+        return areas
+
+    history_store = request.app.state.history_store
+    area_store = request.app.state.area_store
+    settings = get_settings()
+    per_tile_limit = settings.tile_leaderboard_history_points_limit
+    effective_limit = per_tile_limit if per_tile_limit > 0 else 2000
+
+    aggregate_samples: dict[str, int] = {area.area_id: 0 for area in areas}
+    aggregate_minutes: dict[str, int] = {area.area_id: 0 for area in areas}
+
+    for tile_uuid, _label in history_store.get_all_tile_identifiers():
+        history = history_store.get_history(tile_uuid, limit=effective_limit)
+        if not history:
+            continue
+        stats = area_store.compute_area_stats(history, areas)
+        for stat in stats:
+            aggregate_samples[stat.area_id] = aggregate_samples.get(stat.area_id, 0) + stat.samples
+            aggregate_minutes[stat.area_id] = aggregate_minutes.get(stat.area_id, 0) + stat.minutes_spent
+
+    return [
+        area.model_copy(
+            update={
+                "samples": aggregate_samples.get(area.area_id, 0),
+                "minutes_spent": aggregate_minutes.get(area.area_id, 0),
+            }
+        )
+        for area in areas
+    ]
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -181,7 +215,15 @@ async def list_areas(tile_uuid: str, request: Request) -> list[CustomArea]:
 
     # Global map overlays only need polygon geometry; skip heavy history scan here.
     if tile_uuid == "global":
-        return areas
+        try:
+            return await asyncio.wait_for(
+                asyncio.to_thread(_compute_global_area_stats, request, areas),
+                timeout=GLOBAL_AREA_STATS_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            return areas
+        except Exception:
+            return areas
 
     try:
         history = await asyncio.wait_for(

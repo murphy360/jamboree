@@ -110,5 +110,62 @@ export function useCustomAreas({ baseUrl, tileUuid, onRefresh }: UseCustomAreasO
     [normalizedBaseUrl, tileUuid, onRefresh, fetchAreas],
   );
 
-  return { areas, createArea, renameArea, deleteArea };
+  const deleteAreas = useCallback(
+    async (areaIds: string[]): Promise<void> => {
+      if (!tileUuid || !normalizedBaseUrl || areaIds.length === 0) {
+        return;
+      }
+
+      for (const areaId of areaIds) {
+        const response = await fetch(
+          `${normalizedBaseUrl}/tiles/${encodeURIComponent(tileUuid)}/areas/${encodeURIComponent(areaId)}`,
+          { method: "DELETE" },
+        );
+        if (!response.ok && response.status !== 404) {
+          throw new Error(`Delete failed (${response.status})`);
+        }
+      }
+
+      await fetchAreas();
+      onRefresh();
+    },
+    [normalizedBaseUrl, tileUuid, onRefresh, fetchAreas],
+  );
+
+  const mergeAreas = useCallback(
+    async (targetAreaId: string, sourceAreaIds: string[]): Promise<void> => {
+      if (!tileUuid || !normalizedBaseUrl) {
+        return;
+      }
+      if (!targetAreaId || sourceAreaIds.length === 0) {
+        return;
+      }
+
+      const response = await fetch(
+        `${normalizedBaseUrl}/tiles/${encodeURIComponent(tileUuid)}/areas`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: "merge",
+            cluster_centers: [],
+            hotspot_centers: [],
+            merge_into_area_id: targetAreaId,
+            merge_source_area_ids: sourceAreaIds,
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        const detail = (await response.json().catch(() => ({}))) as { detail?: string };
+        throw new Error(detail.detail ?? `Merge failed (${response.status})`);
+      }
+
+      await fetchAreas();
+      onRefresh();
+    },
+    [normalizedBaseUrl, tileUuid, onRefresh, fetchAreas],
+  );
+
+  return { areas, createArea, renameArea, deleteArea, deleteAreas, mergeAreas };
 }

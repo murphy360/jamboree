@@ -1,17 +1,23 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { CustomArea } from "../hooks/useTileDetails";
 
 type CustomAreasPanelProps = {
   areas: CustomArea[];
   onRename: (areaId: string, name: string) => Promise<void>;
   onDelete: (areaId: string) => Promise<void>;
+  onDeleteMany: (areaIds: string[]) => Promise<void>;
+  onMergeAreas: (targetAreaId: string, sourceAreaIds: string[]) => Promise<void>;
 };
 
 type AreaRowProps = {
   area: CustomArea;
+  selected: boolean;
+  onToggleSelected: (areaId: string) => void;
   onRename: (areaId: string, name: string) => Promise<void>;
   onDelete: (areaId: string) => Promise<void>;
 };
+
+type SortMode = "samples-desc" | "samples-asc" | "name-asc" | "name-desc";
 
 function formatMinutes(value: number): string {
   if (value < 60) return `${value} min`;
@@ -20,7 +26,7 @@ function formatMinutes(value: number): string {
   return minutes === 0 ? `${hours} hr` : `${hours} hr ${minutes} min`;
 }
 
-function AreaRow({ area, onRename, onDelete }: AreaRowProps) {
+function AreaRow({ area, selected, onToggleSelected, onRename, onDelete }: AreaRowProps) {
   const [editing, setEditing] = useState(false);
   const [nameInput, setNameInput] = useState(area.name);
   const [busy, setBusy] = useState(false);
@@ -71,6 +77,13 @@ function AreaRow({ area, onRename, onDelete }: AreaRowProps) {
       ) : (
         <div className="tile-area-row-content">
           <div className="tile-area-row-info">
+            <input
+              type="checkbox"
+              className="tile-area-checkbox"
+              checked={selected}
+              onChange={() => onToggleSelected(area.area_id)}
+              aria-label={`Select ${area.name}`}
+            />
             <strong>{area.name}</strong>
             <span>{area.samples} samples</span>
             {area.minutes_spent > 0 && <span>{formatMinutes(area.minutes_spent)}</span>}
@@ -90,7 +103,92 @@ function AreaRow({ area, onRename, onDelete }: AreaRowProps) {
   );
 }
 
-export function CustomAreasPanel({ areas, onRename, onDelete }: CustomAreasPanelProps) {
+export function CustomAreasPanel({ areas, onRename, onDelete, onDeleteMany, onMergeAreas }: CustomAreasPanelProps) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [sortMode, setSortMode] = useState<SortMode>("samples-desc");
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  const sortedAreas = useMemo(() => {
+    const items = [...areas];
+    items.sort((a, b) => {
+      if (sortMode === "samples-desc") {
+        return b.samples - a.samples || a.name.localeCompare(b.name);
+      }
+      if (sortMode === "samples-asc") {
+        return a.samples - b.samples || a.name.localeCompare(b.name);
+      }
+      if (sortMode === "name-desc") {
+        return b.name.localeCompare(a.name);
+      }
+      return a.name.localeCompare(b.name);
+    });
+    return items;
+  }, [areas, sortMode]);
+
+  const selectedAreas = useMemo(
+    () => sortedAreas.filter((area) => selectedIds.has(area.area_id)),
+    [sortedAreas, selectedIds],
+  );
+
+  const toggleSelected = (areaId: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(areaId)) {
+        next.delete(areaId);
+      } else {
+        next.add(areaId);
+      }
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    setSelectedIds(new Set(sortedAreas.map((area) => area.area_id)));
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedAreas.length === 0) {
+      return;
+    }
+    if (!confirm(`Delete ${selectedAreas.length} selected areas?`)) {
+      return;
+    }
+    setBulkBusy(true);
+    try {
+      await onDeleteMany(selectedAreas.map((area) => area.area_id));
+      setSelectedIds(new Set());
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleMergeSelected = async () => {
+    if (selectedAreas.length < 2) {
+      return;
+    }
+
+    const target = selectedAreas[0];
+    const sources = selectedAreas.slice(1);
+    if (!confirm(`Merge ${sources.length} areas into "${target.name}"?`)) {
+      return;
+    }
+
+    setBulkBusy(true);
+    try {
+      await onMergeAreas(
+        target.area_id,
+        sources.map((area) => area.area_id),
+      );
+      setSelectedIds(new Set([target.area_id]));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   if (areas.length === 0) {
     return (
       <p className="tile-list-empty">
@@ -100,10 +198,58 @@ export function CustomAreasPanel({ areas, onRename, onDelete }: CustomAreasPanel
   }
 
   return (
-    <ul className="tile-details-list">
-      {areas.map((area) => (
-        <AreaRow key={area.area_id} area={area} onRename={onRename} onDelete={onDelete} />
-      ))}
-    </ul>
+    <>
+      <div className="tile-area-toolbar">
+        <label className="tile-area-sort">
+          <span>Sort</span>
+          <select value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)}>
+            <option value="samples-desc">Samples (high to low)</option>
+            <option value="samples-asc">Samples (low to high)</option>
+            <option value="name-asc">Name (A-Z)</option>
+            <option value="name-desc">Name (Z-A)</option>
+          </select>
+        </label>
+        <div className="tile-area-selection-actions">
+          <button type="button" className="tile-area-btn" onClick={selectAll} disabled={bulkBusy || sortedAreas.length === 0}>
+            Select all
+          </button>
+          <button type="button" className="tile-area-btn" onClick={clearSelection} disabled={bulkBusy || selectedAreas.length === 0}>
+            Clear
+          </button>
+          <button
+            type="button"
+            className="tile-area-btn"
+            onClick={() => void handleMergeSelected()}
+            disabled={bulkBusy || selectedAreas.length < 2}
+            title="Merges into the first selected area in current sort order"
+          >
+            {bulkBusy ? "Working…" : "Merge selected"}
+          </button>
+          <button
+            type="button"
+            className="tile-area-btn tile-area-btn-delete"
+            onClick={() => void handleDeleteSelected()}
+            disabled={bulkBusy || selectedAreas.length === 0}
+          >
+            Delete selected
+          </button>
+        </div>
+      </div>
+
+      <p className="tile-history-meta">Selected: {selectedAreas.length}</p>
+
+      <ul className="tile-details-list">
+        {sortedAreas.map((area) => (
+          <AreaRow
+            key={area.area_id}
+            area={area}
+            selected={selectedIds.has(area.area_id)}
+            onToggleSelected={toggleSelected}
+            onRename={onRename}
+            onDelete={onDelete}
+          />
+        ))}
+      </ul>
+    </>
   );
 }

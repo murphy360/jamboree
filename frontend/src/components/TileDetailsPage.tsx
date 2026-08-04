@@ -119,7 +119,7 @@ function DetailsContent({ details, loading, onBack, onTrackerRemoved, baseUrl, t
   const [selectedHotspot, setSelectedHotspot] = useState<SelectedHotspot | null>(null);
   const [deletePending, setDeletePending] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const { createArea, renameArea, deleteArea } = useCustomAreas({
+  const { createArea, renameArea, deleteArea, deleteAreas, mergeAreas } = useCustomAreas({
     baseUrl,
     tileUuid,
     onRefresh: onRefreshDetails,
@@ -245,6 +245,8 @@ function DetailsContent({ details, loading, onBack, onTrackerRemoved, baseUrl, t
           areas={details.custom_areas}
           onRename={renameArea}
           onDelete={deleteArea}
+          onDeleteMany={deleteAreas}
+          onMergeAreas={mergeAreas}
         />
       </section>
     </section>

@@ -334,7 +334,7 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
     }));
   };
 
-  const { areas, createArea, renameArea, deleteArea } = useCustomAreas({
+  const { areas, createArea, renameArea, deleteArea, deleteAreas, mergeAreas } = useCustomAreas({
     baseUrl: backendUrl,
     tileUuid: "global", // Placeholder UUID to fetch global areas
     onRefresh: () => {},
@@ -549,7 +549,13 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
             />
             <span>Show imported points with human-readable names ({importedPoints.length})</span>
           </label>
-          <CustomAreasPanel areas={areas} onRename={renameArea} onDelete={deleteArea} />
+          <CustomAreasPanel
+            areas={areas}
+            onRename={renameArea}
+            onDelete={deleteArea}
+            onDeleteMany={deleteAreas}
+            onMergeAreas={mergeAreas}
+          />
         </section>
       )}
     </div>

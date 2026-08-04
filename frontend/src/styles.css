@@ -572,6 +572,10 @@ body {
 .tile-area-confirm { padding: 0.28rem 0.7rem; background: #7c3aed; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.875rem; }
 .tile-area-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
 .tile-area-cancel { padding: 0.28rem 0.7rem; background: white; border: 1px solid #94a3b8; border-radius: 4px; cursor: pointer; font-size: 0.875rem; }
+.tile-area-toolbar { display: flex; gap: 0.75rem; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 0.25rem 0 0.5rem; }
+.tile-area-sort { display: inline-flex; align-items: center; gap: 0.45rem; color: #334155; font-size: 0.84rem; font-weight: 600; }
+.tile-area-sort select { border: 1px solid #cbd5e1; border-radius: 0.45rem; background: #fff; color: #0f172a; padding: 0.24rem 0.45rem; font: inherit; }
+.tile-area-selection-actions { display: inline-flex; gap: 0.4rem; flex-wrap: wrap; }
 
 .map-area-label-marker {
   background: transparent;
