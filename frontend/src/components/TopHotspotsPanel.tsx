@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import type { TileLocation } from "../hooks/useTileLocations";
-import type { TileDwellCluster } from "../hooks/useTileDetails";
+import type { CustomArea, TileDwellCluster } from "../hooks/useTileDetails";
 
 type TopHotspotsPanelProps = {
   backendUrl: string;
   locations: TileLocation[];
-  onSelectHotspot: (hotspot: { latitude: number; longitude: number; label: string }) => void;
+  areas: CustomArea[];
+  onSelectHotspot: (hotspot: { latitude: number; longitude: number; label: string; radiusMeters: number }) => void;
 };
 
 type TileDetailsPayload = {
@@ -18,6 +19,7 @@ type HotspotRow = {
   id: string;
   latitude: number;
   longitude: number;
+  radiusMeters: number;
   totalMinutesSpent: number;
   totalScoutPoints: number;
   scoutCount: number;
@@ -26,10 +28,56 @@ type HotspotRow = {
 type AggregatedHotspot = {
   latitudeSum: number;
   longitudeSum: number;
+  weightedRadiusSum: number;
   totalMinutesSpent: number;
   totalScoutPoints: number;
   scoutIds: Set<string>;
 };
+
+function pointInPolygon(lat: number, lon: number, polygon: { latitude: number; longitude: number }[]): boolean {
+  const n = polygon.length;
+  if (n < 3) return false;
+  const epsilon = 1e-9;
+
+  const pointOnSegment = (
+    pointLat: number,
+    pointLon: number,
+    startLat: number,
+    startLon: number,
+    endLat: number,
+    endLon: number,
+  ): boolean => {
+    const cross = (pointLat - startLat) * (endLon - startLon) - (pointLon - startLon) * (endLat - startLat);
+    if (Math.abs(cross) > epsilon) return false;
+
+    const dot = (pointLat - startLat) * (endLat - startLat) + (pointLon - startLon) * (endLon - startLon);
+    if (dot < -epsilon) return false;
+
+    const squaredLen = (endLat - startLat) ** 2 + (endLon - startLon) ** 2;
+    return dot <= squaredLen + epsilon;
+  };
+
+  let inside = false;
+  let j = n - 1;
+  for (let i = 0; i < n; i += 1) {
+    const piLat = polygon[i].latitude;
+    const piLon = polygon[i].longitude;
+    const pjLat = polygon[j].latitude;
+    const pjLon = polygon[j].longitude;
+
+    if (pointOnSegment(lat, lon, piLat, piLon, pjLat, pjLon)) return true;
+
+    const lonCrosses = (piLon > lon) !== (pjLon > lon);
+    if (lonCrosses) {
+      const latIntersect =
+        ((pjLat - piLat) * (lon - piLon)) / (pjLon - piLon) +
+        piLat;
+      if (lat < latIntersect) inside = !inside;
+    }
+    j = i;
+  }
+  return inside;
+}
 
 function formatMinutes(value: number): string {
   if (value < 60) {
@@ -41,7 +89,7 @@ function formatMinutes(value: number): string {
   return minutes === 0 ? `${hours} hr` : `${hours} hr ${minutes} min`;
 }
 
-export function TopHotspotsPanel({ backendUrl, locations, onSelectHotspot }: TopHotspotsPanelProps) {
+export function TopHotspotsPanel({ backendUrl, locations, areas, onSelectHotspot }: TopHotspotsPanelProps) {
   const [rows, setRows] = useState<HotspotRow[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -57,6 +105,17 @@ export function TopHotspotsPanel({ backendUrl, locations, onSelectHotspot }: Top
   }, [locations]);
 
   const tileIdsKey = useMemo(() => tileIds.join("|"), [tileIds]);
+  const areaKey = useMemo(() => {
+    const normalized = [...areas]
+      .sort((a, b) => a.area_id.localeCompare(b.area_id))
+      .map(
+        (area) =>
+          `${area.area_id}:${area.updated_at}:${area.polygon
+            .map((point) => `${point.latitude.toFixed(6)},${point.longitude.toFixed(6)}`)
+            .join(";")}`,
+      );
+    return normalized.join("|");
+  }, [areas]);
 
   useEffect(() => {
     if (!normalizedBaseUrl || tileIds.length === 0) {
@@ -87,18 +146,22 @@ export function TopHotspotsPanel({ backendUrl, locations, onSelectHotspot }: Top
           .forEach((payload) => {
             payload.dwell_clusters
               .filter((cluster) => cluster.samples > 0)
+              .filter((cluster) => !areas.some((area) => pointInPolygon(cluster.latitude, cluster.longitude, area.polygon)))
               .forEach((cluster) => {
                 const key = `${cluster.latitude.toFixed(4)}:${cluster.longitude.toFixed(4)}`;
                 const current = grouped.get(key) ?? {
                   latitudeSum: 0,
                   longitudeSum: 0,
+                  weightedRadiusSum: 0,
                   totalMinutesSpent: 0,
                   totalScoutPoints: 0,
                   scoutIds: new Set<string>(),
                 };
 
+                const sampleWeight = Math.max(cluster.samples, 1);
                 current.latitudeSum += cluster.latitude;
                 current.longitudeSum += cluster.longitude;
+                current.weightedRadiusSum += 50 * sampleWeight;
                 current.totalMinutesSpent += cluster.minutes_spent;
                 current.totalScoutPoints += cluster.samples;
                 current.scoutIds.add(payload.tile_uuid);
@@ -113,6 +176,7 @@ export function TopHotspotsPanel({ backendUrl, locations, onSelectHotspot }: Top
               id: key,
               latitude: bucket.latitudeSum / count,
               longitude: bucket.longitudeSum / count,
+              radiusMeters: Math.max(35, Math.min(120, bucket.weightedRadiusSum / Math.max(bucket.totalScoutPoints, 1))),
               totalMinutesSpent: bucket.totalMinutesSpent,
               totalScoutPoints: bucket.totalScoutPoints,
               scoutCount: count,
@@ -145,7 +209,7 @@ export function TopHotspotsPanel({ backendUrl, locations, onSelectHotspot }: Top
     return () => {
       cancelled = true;
     };
-  }, [normalizedBaseUrl, tileIdsKey]);
+  }, [areas, areaKey, normalizedBaseUrl, tileIdsKey]);
 
   if (loading) {
     return <p className="tile-list-empty">Loading hotspots...</p>;
@@ -178,6 +242,7 @@ export function TopHotspotsPanel({ backendUrl, locations, onSelectHotspot }: Top
                   latitude: row.latitude,
                   longitude: row.longitude,
                   label: `Top Hotspot #${index + 1}`,
+                  radiusMeters: row.radiusMeters,
                 })
               }
             >

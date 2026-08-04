@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { latLngBounds, type Polygon as LeafletPolygon } from "leaflet";
-import { CircleMarker, FeatureGroup, MapContainer, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import { Circle, CircleMarker, FeatureGroup, MapContainer, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { AreaPolygons } from "./AreaPolygons";
 import { ArcGISLayers } from "./ArcGISLayers";
@@ -24,7 +24,7 @@ type LiveMapProps = {
   fitSignal?: number;
   showGisLayers?: boolean;
   importedPoints?: ImportedMapPoint[];
-  focusedHotspot?: { latitude: number; longitude: number; label: string } | null;
+  focusedHotspot?: { latitude: number; longitude: number; label: string; radiusMeters?: number } | null;
   focusSignal?: number;
   onFocusedHotspotHandled?: () => void;
   focusedAreas?: CustomArea[];
@@ -39,7 +39,7 @@ type FitToLocationsProps = {
 };
 
 type FocusHotspotProps = {
-  focusedHotspot: { latitude: number; longitude: number; label: string } | null;
+  focusedHotspot: { latitude: number; longitude: number; label: string; radiusMeters?: number } | null;
   focusSignal: number;
   onHandled?: () => void;
 };
@@ -111,7 +111,6 @@ function FocusHotspot({ focusedHotspot, focusSignal, onHandled }: FocusHotspotPr
     map.flyTo([focusedHotspot.latitude, focusedHotspot.longitude], Math.max(map.getZoom(), 17), {
       duration: 0.8,
     });
-    onHandled?.();
   }, [focusedHotspot, focusSignal, map, onHandled]);
 
   return null;
@@ -334,15 +333,22 @@ export function LiveMap({
         <BreadcrumbOverlay breadcrumbs={breadcrumbs} color={breadcrumbColor} />
         <ImportedPointsOverlay points={importedPoints} />
         {focusedHotspot ? (
-          <CircleMarker
-            center={[focusedHotspot.latitude, focusedHotspot.longitude]}
-            radius={9}
-            pathOptions={{ color: "#0f172a", fillColor: "#facc15", fillOpacity: 0.92, weight: 2.5 }}
-          >
-            <Tooltip direction="top" offset={[0, -10]}>
-              {focusedHotspot.label}
-            </Tooltip>
-          </CircleMarker>
+          <>
+            <Circle
+              center={[focusedHotspot.latitude, focusedHotspot.longitude]}
+              radius={focusedHotspot.radiusMeters ?? 50}
+              pathOptions={{ color: "#f59e0b", fillColor: "#fde68a", fillOpacity: 0.18, weight: 2 }}
+            />
+            <CircleMarker
+              center={[focusedHotspot.latitude, focusedHotspot.longitude]}
+              radius={9}
+              pathOptions={{ color: "#0f172a", fillColor: "#facc15", fillOpacity: 0.92, weight: 2.5 }}
+            >
+              <Tooltip direction="top" offset={[0, -10]}>
+                {focusedHotspot.label}
+              </Tooltip>
+            </CircleMarker>
+          </>
         ) : null}
         <TileMarkers
           locations={locations}

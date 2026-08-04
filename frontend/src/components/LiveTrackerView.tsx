@@ -31,6 +31,7 @@ type FocusedHotspot = {
   latitude: number;
   longitude: number;
   label: string;
+  radiusMeters: number;
 };
 
 type AreaGroupedTileList = {
@@ -415,9 +416,7 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
     setFocusSignal((value) => value + 1);
   }, []);
 
-  const handleFocusedHotspotHandled = useCallback(() => {
-    setFocusedHotspot(null);
-  }, []);
+  const handleFocusedHotspotHandled = useCallback(() => {}, []);
 
   const focusedAreas = useMemo(
     () => areas.filter((area) => focusedAreaIds.includes(area.area_id)),
@@ -541,6 +540,7 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
         <TopHotspotsPanel
           backendUrl={backendUrl}
           locations={locations}
+          areas={areas}
           onSelectHotspot={handleSelectTopHotspot}
         />
       )}
