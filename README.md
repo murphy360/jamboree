@@ -155,6 +155,25 @@ curl http://localhost:8086/leaderboard
 curl "http://localhost:8086/leaderboard?date=2026-05-21"
 ```
 
+## Top Areas (Historical)
+
+The Top Areas tab is historical (not live occupancy). It ranks named areas by total
+minutes spent inside each area across stored tracker history.
+
+API endpoint:
+
+- `GET /areas/top` for overall historical rankings.
+- `GET /areas/top?date=YYYY-MM-DD` for a single-day ranking.
+- Optional: `limit=<n>` (default `20`, max `200`).
+- Optional: `area_tile_uuid=<value>` (default `global`).
+
+Examples:
+
+```bash
+curl http://localhost:8086/areas/top
+curl "http://localhost:8086/areas/top?date=2026-07-24&limit=10"
+```
+
 ## Linting Rules
 
 Linting is tuned for LLM-driven development and explicitly prevents large, god-class/god-file code.
@@ -184,3 +203,4 @@ docker compose exec frontend npm run lint
 - Tile details page includes history, dwell clusters, and custom area management.
 - Tile details page includes a Remove tracker action that clears local history and custom areas for that tracker.
 - Leaderboard UI supports Daily and Overall rankings for distance and time-in-camp.
+- Top Areas tab supports Daily and Overall historical area dwell rankings.
