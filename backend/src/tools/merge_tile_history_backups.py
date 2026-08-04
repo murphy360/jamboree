@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -250,6 +251,32 @@ def discover_backup_files(primary_db: Path, pattern: str = "*.bak") -> list[Path
     return sorted(path for path in primary_db.parent.glob(pattern) if path.is_file())
 
 
+def archive_backup_files(backup_files: list[Path], archive_dir: Path) -> int:
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    moved = 0
+
+    for source in backup_files:
+        if not source.exists():
+            continue
+
+        destination = archive_dir / source.name
+        if destination.exists():
+            stem = destination.stem
+            suffix = destination.suffix
+            counter = 1
+            while True:
+                candidate = archive_dir / f"{stem}.{counter}{suffix}"
+                if not candidate.exists():
+                    destination = candidate
+                    break
+                counter += 1
+
+        shutil.move(str(source), str(destination))
+        moved += 1
+
+    return moved
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Merge SQLite tile history backup files (.bak) into the primary tile_history.db",
@@ -269,6 +296,19 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip VACUUM after merge",
     )
+    parser.add_argument(
+        "--archive-dir",
+        default="",
+        help=(
+            "Optional directory where merged .bak files are moved after a successful merge. "
+            "Relative paths are resolved from the DB directory."
+        ),
+    )
+    parser.add_argument(
+        "--no-archive",
+        action="store_true",
+        help="Do not move merged .bak files after merge",
+    )
     return parser.parse_args()
 
 
@@ -287,11 +327,23 @@ def main() -> int:
         backup_files,
         run_vacuum=not args.no_vacuum,
     )
+
+    moved_count = 0
+    if not args.no_archive:
+        archive_dir = Path(args.archive_dir)
+        if not args.archive_dir:
+            archive_dir = primary_db.parent / "merged"
+        elif not archive_dir.is_absolute():
+            archive_dir = primary_db.parent / archive_dir
+
+        moved_count = archive_backup_files(backup_files, archive_dir)
+
     print(
         "Merge complete: "
         f"files={stats.processed_files}, history_rows={stats.history_rows}, "
         f"custom_area_rows={stats.custom_area_rows}, "
-        f"vacuum={'no' if args.no_vacuum else 'yes'}"
+        f"vacuum={'no' if args.no_vacuum else 'yes'}, "
+        f"archived_files={moved_count}"
     )
     return 0
 

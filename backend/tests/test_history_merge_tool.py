@@ -4,7 +4,11 @@ import sqlite3
 
 from src.services.history_store import TileHistoryStore
 from src.services.models import TileLocation
-from src.tools.merge_tile_history_backups import discover_backup_files, merge_backups_into_primary
+from src.tools.merge_tile_history_backups import (
+    archive_backup_files,
+    discover_backup_files,
+    merge_backups_into_primary,
+)
 
 
 def _record_points(db_path: Path, tile_uuid: str, offsets: list[int]) -> None:
@@ -130,3 +134,21 @@ def test_merge_backups_into_primary_restores_custom_areas(tmp_path) -> None:
     assert row is not None
     assert row[0] == "Recovered Area"
     assert row[1] == "global"
+
+
+def test_archive_backup_files_moves_bak_files_into_merged_folder(tmp_path) -> None:
+    primary = tmp_path / "tile_history.db"
+    backup_one = tmp_path / "tile_history.db.1.bak"
+    backup_two = tmp_path / "tile_history.db.2.bak"
+    primary.write_text("", encoding="utf-8")
+    backup_one.write_text("one", encoding="utf-8")
+    backup_two.write_text("two", encoding="utf-8")
+
+    archive_dir = tmp_path / "merged"
+    moved = archive_backup_files([backup_one, backup_two], archive_dir)
+
+    assert moved == 2
+    assert not backup_one.exists()
+    assert not backup_two.exists()
+    assert (archive_dir / backup_one.name).exists()
+    assert (archive_dir / backup_two.name).exists()

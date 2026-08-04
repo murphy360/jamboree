@@ -26,6 +26,9 @@ Set these values in `backend/.env`:
 - `HOME_ASSISTANT_EXCLUDE_ENTITIES` (optional comma-separated entity IDs to ignore, e.g. `device_tracker.corey_s_s25_ultra`)
 - `HOME_ASSISTANT_REQUIRE_HASH` (`true` by default; only includes trackers with `#` in name/identifier fields)
 - `TILE_HISTORY_DB_PATH` (`/app/data/tile_history.db` by default; persisted to `backend/data` via Docker volume)
+- `TILE_HISTORY_MERGE_ON_STARTUP` (`true` by default; merges `*.bak` files into primary DB before backend starts)
+- `TILE_HISTORY_MERGE_PATTERN` (`*.bak` by default; glob used to discover backup DB files)
+- `TILE_HISTORY_MERGE_ARCHIVE_DIR` (`merged` by default; merged backup files are moved here after merge)
 - `TILE_HISTORY_MAX_POINTS_PER_TILE` (`0` by default for unlimited retention; set a positive value to cap stored points per tile)
 - `TILE_HISTORY_API_DEFAULT_LIMIT` (`0` by default; default `limit` applied to `GET /tiles/{tile_uuid}/history` when query param is omitted)
 - `TILE_DETAILS_API_DEFAULT_LIMIT` (`3000` by default; default `history_limit` applied to `GET /tiles/{tile_uuid}/details` when query param is omitted)
@@ -77,9 +80,14 @@ If you rotated history databases to `.bak` files, merge them back into the prima
 docker compose exec backend python -m src.tools.merge_tile_history_backups --db /app/data/tile_history.db
 ```
 
+On backend startup, this merge runs automatically by default and archives merged `.bak`
+files into `/app/data/merged` (mounted as `backend/data/merged` on the host).
+
 Optional flags:
 - `--pattern "*.bak"` to control which backup files are merged.
 - `--no-vacuum` to skip final `VACUUM`.
+- `--archive-dir merged` to control where merged backups are moved.
+- `--no-archive` to keep `.bak` files in place.
 
 This merge restores both:
 - `tile_history` rows
