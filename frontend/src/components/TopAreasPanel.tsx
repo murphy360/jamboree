@@ -1,59 +1,103 @@
-import type { CustomArea } from "../hooks/useTileDetails";
-import type { TileListEntry } from "../utils/tileAge";
+import { useState } from "react";
+import { useTopAreas } from "../hooks/useTopAreas";
 
 type TopAreasPanelProps = {
-  groups: Array<{
-    area: CustomArea;
-    entries: TileListEntry[];
-  }>;
-  totalActiveTiles: number;
+  backendUrl: string;
 };
 
-function formatPercent(value: number): string {
-  if (!Number.isFinite(value)) {
-    return "0%";
+function formatMinutes(minutes: number): string {
+  if (!Number.isFinite(minutes) || minutes <= 0) {
+    return "0m";
   }
-  return `${Math.round(value * 100)}%`;
+  const wholeMinutes = Math.round(minutes);
+  const h = Math.floor(wholeMinutes / 60);
+  const m = wholeMinutes % 60;
+  if (h > 0) {
+    return `${h}h ${m}m`;
+  }
+  return `${m}m`;
 }
 
-export function TopAreasPanel({ groups, totalActiveTiles }: TopAreasPanelProps) {
-  const ranked = [...groups]
-    .filter((group) => group.entries.length > 0)
-    .sort((a, b) => b.entries.length - a.entries.length || a.area.name.localeCompare(b.area.name));
+export function TopAreasPanel({ backendUrl }: TopAreasPanelProps) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [dateMode, setDateMode] = useState<"daily" | "overall">("overall");
+  const [selectedDate, setSelectedDate] = useState<string>(today);
 
-  if (ranked.length === 0) {
-    return <p className="tile-list-empty">No active tiles are inside named areas right now.</p>;
-  }
+  const queryDate = dateMode === "daily" ? selectedDate : null;
+  const { data, loading, error, refresh } = useTopAreas(backendUrl, queryDate, 20);
 
   return (
-    <section className="tile-details-panel">
-      <h3 className="tile-details-subtitle">Top Areas</h3>
-      <p className="tile-history-meta">
-        Ranked by active tiles currently inside each area.
-      </p>
-      <table className="leaderboard-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Area</th>
-            <th>Active Tiles</th>
-            <th>Coverage</th>
-          </tr>
-        </thead>
-        <tbody>
-          {ranked.map((group, index) => {
-            const ratio = totalActiveTiles > 0 ? group.entries.length / totalActiveTiles : 0;
-            return (
-              <tr key={group.area.area_id}>
-                <td className="leaderboard-rank">{index + 1}</td>
-                <td>{group.area.name}</td>
-                <td className="leaderboard-value">{group.entries.length}</td>
-                <td className="leaderboard-value">{formatPercent(ratio)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+    <section className="leaderboard-panel">
+      <div className="leaderboard-header">
+        <h2>Top Areas</h2>
+        <button type="button" className="leaderboard-refresh-btn" onClick={() => void refresh()}>
+          Refresh
+        </button>
+      </div>
+
+      <div className="leaderboard-controls">
+        <div className="leaderboard-mode-toggle">
+          <button
+            type="button"
+            className={dateMode === "daily" ? "leaderboard-mode-btn is-active" : "leaderboard-mode-btn"}
+            onClick={() => setDateMode("daily")}
+          >
+            Daily
+          </button>
+          <button
+            type="button"
+            className={dateMode === "overall" ? "leaderboard-mode-btn is-active" : "leaderboard-mode-btn"}
+            onClick={() => setDateMode("overall")}
+          >
+            Overall
+          </button>
+        </div>
+
+        {dateMode === "daily" && (
+          <input
+            type="date"
+            className="leaderboard-date-input"
+            value={selectedDate}
+            max={today}
+            onChange={(event) => setSelectedDate(event.target.value)}
+          />
+        )}
+      </div>
+
+      {loading && <p className="leaderboard-status">Loading...</p>}
+      {error && <p className="leaderboard-status leaderboard-error">Error: {error}</p>}
+
+      {!loading && !error && (
+        <>
+          <p className="tile-history-meta">Ranked by total historical minutes inside each named area.</p>
+          {data?.items.length ? (
+            <table className="leaderboard-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Area</th>
+                  <th>Time Spent</th>
+                  <th>Samples</th>
+                  <th>Tiles</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.items.map((entry) => (
+                  <tr key={entry.area_id}>
+                    <td className="leaderboard-rank">{entry.rank}</td>
+                    <td>{entry.area_name}</td>
+                    <td className="leaderboard-value">{formatMinutes(entry.minutes_spent)}</td>
+                    <td className="leaderboard-value">{entry.samples}</td>
+                    <td className="leaderboard-value">{entry.tiles_count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="leaderboard-empty">No historical area dwell data yet.</p>
+          )}
+        </>
+      )}
     </section>
   );
 }

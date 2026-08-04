@@ -530,7 +530,7 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
       )}
 
       {tileListMode === "top-areas" && (
-        <TopAreasPanel groups={groupedTiles.groups} totalActiveTiles={locations.length} />
+        <TopAreasPanel backendUrl={backendUrl} />
       )}
 
       {tileListMode === "leaderboard" && <LeaderboardPanel backendUrl={backendUrl} />}

@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from src.main import app
 from src.services.area_store import AreaStore
 from src.services.history_store import TileHistoryStore
+from src.services.leaderboard_store import LeaderboardStore
 from src.services.models import AreaPolygonPoint, TileLocation
 
 
@@ -484,3 +485,115 @@ def test_tile_details_endpoint_applies_history_limit_and_reports_truncation(tmp_
         assert payload["items"][0]["observed_at"] == "2026-05-23T09:03:00Z"
     finally:
         app.state.history_store = original_store
+
+
+def test_top_areas_endpoint_returns_historical_minutes_ranked(tmp_path) -> None:
+    original_history_store = getattr(app.state, "history_store", None)
+    original_area_store = getattr(app.state, "area_store", None)
+    original_leaderboard_store = getattr(app.state, "leaderboard_store", None)
+
+    db_path = tmp_path / "top-areas.db"
+    history_store = TileHistoryStore(db_path=str(db_path))
+    area_store = AreaStore(db_path=str(db_path))
+    leaderboard_store = LeaderboardStore(
+        history_store=history_store,
+        area_store=area_store,
+        cache_ttl_seconds=0,
+    )
+
+    area_store.create_area(
+        "global",
+        "Action Alley",
+        [
+            AreaPolygonPoint(latitude=38.1000, longitude=-81.2000),
+            AreaPolygonPoint(latitude=38.1000, longitude=-81.1900),
+            AreaPolygonPoint(latitude=38.1100, longitude=-81.1900),
+            AreaPolygonPoint(latitude=38.1100, longitude=-81.2000),
+        ],
+    )
+    area_store.create_area(
+        "global",
+        "Patch Zone",
+        [
+            AreaPolygonPoint(latitude=38.2000, longitude=-81.3000),
+            AreaPolygonPoint(latitude=38.2000, longitude=-81.2900),
+            AreaPolygonPoint(latitude=38.2100, longitude=-81.2900),
+            AreaPolygonPoint(latitude=38.2100, longitude=-81.3000),
+        ],
+    )
+
+    history_store.record(
+        [
+            TileLocation(
+                tile_uuid="device_tracker.tile_1",
+                latitude=38.1050,
+                longitude=-81.1950,
+                observed_at=datetime(2026, 7, 24, 12, 0, tzinfo=UTC),
+                label="Tile 1",
+            ),
+            TileLocation(
+                tile_uuid="device_tracker.tile_1",
+                latitude=38.1050,
+                longitude=-81.1950,
+                observed_at=datetime(2026, 7, 24, 12, 30, tzinfo=UTC),
+                label="Tile 1",
+            ),
+            TileLocation(
+                tile_uuid="device_tracker.tile_2",
+                latitude=38.1055,
+                longitude=-81.1940,
+                observed_at=datetime(2026, 7, 24, 13, 0, tzinfo=UTC),
+                label="Tile 2",
+            ),
+            TileLocation(
+                tile_uuid="device_tracker.tile_2",
+                latitude=38.1055,
+                longitude=-81.1940,
+                observed_at=datetime(2026, 7, 24, 13, 20, tzinfo=UTC),
+                label="Tile 2",
+            ),
+            TileLocation(
+                tile_uuid="device_tracker.tile_3",
+                latitude=38.2050,
+                longitude=-81.2950,
+                observed_at=datetime(2026, 7, 24, 14, 0, tzinfo=UTC),
+                label="Tile 3",
+            ),
+            TileLocation(
+                tile_uuid="device_tracker.tile_3",
+                latitude=38.2050,
+                longitude=-81.2950,
+                observed_at=datetime(2026, 7, 24, 14, 10, tzinfo=UTC),
+                label="Tile 3",
+            ),
+        ]
+    )
+
+    app.state.history_store = history_store
+    app.state.area_store = area_store
+    app.state.leaderboard_store = leaderboard_store
+
+    try:
+        client = TestClient(app)
+        response = client.get("/areas/top")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["area_tile_uuid"] == "global"
+        assert len(payload["items"]) == 2
+
+        first = payload["items"][0]
+        assert first["rank"] == 1
+        assert first["area_name"] == "Action Alley"
+        assert first["minutes_spent"] == 50
+        assert first["tiles_count"] == 2
+
+        second = payload["items"][1]
+        assert second["rank"] == 2
+        assert second["area_name"] == "Patch Zone"
+        assert second["minutes_spent"] == 10
+        assert second["tiles_count"] == 1
+    finally:
+        app.state.history_store = original_history_store
+        app.state.area_store = original_area_store
+        app.state.leaderboard_store = original_leaderboard_store
