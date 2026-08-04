@@ -233,3 +233,48 @@ def test_area_points_excluded_from_dwell_clusters(tmp_path):
     assert len(clusters_without_area) == 2
     # With area filtering: first cluster excluded, only second remains
     assert len(clusters_with_area) < len(clusters_without_area)
+
+
+def test_merge_areas_by_name_prefix_combines_and_renames(tmp_path):
+    store = make_store(tmp_path)
+    store.create_area(
+        "global",
+        "BARR North",
+        [
+            AreaPolygonPoint(latitude=38.070, longitude=-81.070),
+            AreaPolygonPoint(latitude=38.071, longitude=-81.070),
+            AreaPolygonPoint(latitude=38.0705, longitude=-81.069),
+        ],
+    )
+    store.create_area(
+        "global",
+        "BARR South",
+        [
+            AreaPolygonPoint(latitude=38.080, longitude=-81.080),
+            AreaPolygonPoint(latitude=38.081, longitude=-81.080),
+            AreaPolygonPoint(latitude=38.0805, longitude=-81.079),
+        ],
+    )
+    store.create_area(
+        "global",
+        "Other",
+        [
+            AreaPolygonPoint(latitude=38.090, longitude=-81.090),
+            AreaPolygonPoint(latitude=38.091, longitude=-81.090),
+            AreaPolygonPoint(latitude=38.0905, longitude=-81.089),
+        ],
+    )
+
+    matched_count, deleted_count = store.merge_areas_by_name_prefix(
+        tile_uuid="global",
+        source_prefix="BARR",
+        target_name="Barrels",
+    )
+
+    assert matched_count == 2
+    assert deleted_count == 1
+
+    areas = store.get_areas("global")
+    names = [area.name for area in areas]
+    assert names.count("Barrels") == 1
+    assert "Other" in names

@@ -29,6 +29,20 @@ ONE_SHOT_RESETS = [
     ("20260722_0630_edt", datetime(2026, 7, 22, 6, 30, tzinfo=ONE_SHOT_RESET_TZ)),
 ]
 
+
+def _parse_polygon_merge_rules(value: str) -> list[tuple[str, str]]:
+    rules: list[tuple[str, str]] = []
+    for chunk in value.split(","):
+        token = chunk.strip()
+        if not token or ":" not in token:
+            continue
+        source_prefix, target_name = token.split(":", 1)
+        source_prefix = source_prefix.strip()
+        target_name = target_name.strip()
+        if source_prefix and target_name:
+            rules.append((source_prefix, target_name))
+    return rules
+
 # Parse CORS origins - supports both "*" and comma-separated list
 cors_origins = [origin.strip() for origin in settings.backend_cors_origins.split(",") if origin.strip()]
 
@@ -72,6 +86,7 @@ mymaps_sync_service = MyMapsSyncService(
     interval_seconds=settings.mymaps_import_interval_seconds,
     enabled=settings.mymaps_import_enabled,
     polygon_exclude_prefixes=settings.mymaps_polygon_exclude_prefixes.split(","),
+    polygon_merge_rules=_parse_polygon_merge_rules(settings.mymaps_polygon_merge_rules),
 )
 app.state.mymaps_sync_service = mymaps_sync_service
 poller_task: asyncio.Task | None = None

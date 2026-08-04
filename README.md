@@ -34,6 +34,7 @@ Set these values in `backend/.env`:
 - `MYMAPS_KML_URL` (KML feed URL used for imports)
 - `MYMAPS_IMPORT_TILE_UUID` (`global` by default)
 - `MYMAPS_IMPORT_INTERVAL_SECONDS` (`900` by default; sync interval in seconds)
+- `MYMAPS_POLYGON_MERGE_RULES` (`BARR:Barrels,BOWS:Bows` by default; applied automatically after each My Maps sync)
 
 Tile details endpoint supports runtime override for hotspot merge distance:
 - `GET /tiles/{tile_uuid}/details?dwell_merge_meters=50`
@@ -54,6 +55,7 @@ Google My Maps import behavior:
 - Runs automatically on backend startup.
 - Re-runs periodically based on `MYMAPS_IMPORT_INTERVAL_SECONDS`.
 - Replaces previously imported non-manual geometries while keeping manual areas intact.
+- Automatically merges configured prefix groups into canonical polygons after each sync (default: `BARR* -> Barrels`, `BOWS* -> Bows`).
 
 Import-related endpoints:
 - `POST /imports/mymaps/sync` triggers an immediate KML sync.
@@ -96,6 +98,21 @@ Optional flags:
 - `--start <ISO8601>` to override start time.
 - `--end <ISO8601>` to override end time.
 - `--no-vacuum` to skip final `VACUUM`.
+
+### Merge BARR Polygons Into Barrels
+
+To combine all polygons whose names start with `BARR` into one `Barrels` polygon:
+
+```bash
+docker compose exec backend python -m src.tools.merge_barr_polygons --db /app/data/tile_history.db --tile-uuid global
+```
+
+Defaults:
+- `--source-prefix BARR`
+- `--target-name Barrels`
+
+Optional flags:
+- `--tile-uuid <value>` to limit the merge scope (recommended: `global`).
 
 2. Start the stack:
 

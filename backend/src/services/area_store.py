@@ -399,6 +399,77 @@ class AreaStore:
             self._connection.commit()
         return cursor.rowcount
 
+    def merge_areas_by_name_prefix(
+        self,
+        tile_uuid: str,
+        source_prefix: str,
+        target_name: str,
+    ) -> tuple[int, int]:
+        """Merge all matching prefix areas into one target area.
+
+        Returns (matched_count, deleted_count).
+        """
+        normalized_prefix = source_prefix.strip()
+        normalized_target = target_name.strip()
+        if not normalized_prefix or not normalized_target:
+            return (0, 0)
+
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT area_id, name, polygon_json
+                FROM custom_areas
+                WHERE tile_uuid = ? AND lower(name) LIKE lower(?)
+                ORDER BY created_at ASC
+                """,
+                (tile_uuid, f"{normalized_prefix}%"),
+            ).fetchall()
+
+            if not rows:
+                return (0, 0)
+
+            all_points: list[tuple[float, float]] = []
+            for row in rows:
+                polygon_points = json.loads(row["polygon_json"])
+                all_points.extend(
+                    (point["latitude"], point["longitude"])
+                    for point in polygon_points
+                )
+
+            hull = convex_hull(all_points)
+            polygon_json = json.dumps(
+                [{"latitude": lat, "longitude": lon} for lat, lon in hull]
+            )
+            now = datetime.now(UTC).isoformat()
+
+            target_row = next(
+                (row for row in rows if row["name"].strip().lower() == normalized_target.lower()),
+                rows[0],
+            )
+            keep_area_id = target_row["area_id"]
+
+            self._connection.execute(
+                """
+                UPDATE custom_areas
+                SET name = ?, polygon_json = ?, updated_at = ?
+                WHERE area_id = ?
+                """,
+                (normalized_target, polygon_json, now, keep_area_id),
+            )
+
+            delete_ids = [row["area_id"] for row in rows if row["area_id"] != keep_area_id]
+            deleted_count = 0
+            if delete_ids:
+                placeholders = ",".join("?" for _ in delete_ids)
+                cursor = self._connection.execute(
+                    f"DELETE FROM custom_areas WHERE area_id IN ({placeholders})",
+                    tuple(delete_ids),
+                )
+                deleted_count = cursor.rowcount
+
+            self._connection.commit()
+        return (len(rows), deleted_count)
+
     # ------------------------------------------------------------------
     # Stats computation
     # ------------------------------------------------------------------

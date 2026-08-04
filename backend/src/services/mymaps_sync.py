@@ -41,6 +41,7 @@ class MyMapsSyncService:
         interval_seconds: int,
         enabled: bool,
         polygon_exclude_prefixes: list[str] | None = None,
+        polygon_merge_rules: list[tuple[str, str]] | None = None,
     ) -> None:
         self._area_store = area_store
         self._map_feature_store = map_feature_store
@@ -52,6 +53,11 @@ class MyMapsSyncService:
             prefix.strip().lower()
             for prefix in (polygon_exclude_prefixes or [])
             if prefix.strip()
+        ]
+        self._polygon_merge_rules = [
+            (source.strip(), target.strip())
+            for source, target in (polygon_merge_rules or [])
+            if source.strip() and target.strip()
         ]
         self._shutdown = asyncio.Event()
         self._lock = asyncio.Lock()
@@ -132,6 +138,22 @@ class MyMapsSyncService:
                 source_url=self._kml_url,
                 features=feature_rows,
             )
+
+            for source_prefix, target_name in self._polygon_merge_rules:
+                matched_count, deleted_count = self._area_store.merge_areas_by_name_prefix(
+                    tile_uuid=self._tile_uuid,
+                    source_prefix=source_prefix,
+                    target_name=target_name,
+                )
+                if matched_count > 0:
+                    LOGGER.info(
+                        "My Maps polygon merge applied tile=%s source_prefix=%s target=%s matched=%s deleted=%s",
+                        self._tile_uuid,
+                        source_prefix,
+                        target_name,
+                        matched_count,
+                        deleted_count,
+                    )
 
             result = MyMapsSyncResult(
                 source_url=self._kml_url,

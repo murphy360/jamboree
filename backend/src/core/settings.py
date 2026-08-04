@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     )
     mymaps_import_interval_seconds: int = Field(default=900, ge=60, le=86400)
     mymaps_polygon_exclude_prefixes: str = "feature"
+    mymaps_polygon_merge_rules: str = "BARR:Barrels,BOWS:Bows"
 
 
 class HealthResponse(BaseModel):
