@@ -76,6 +76,27 @@ Optional flags:
 Frontend detail-page history fetch size is controlled by:
 - `VITE_TILE_DETAILS_HISTORY_LIMIT` (default `3000`)
 
+### Tile History Time-Window Prune Tool
+
+To keep only data within your target time window and delete everything else:
+
+```bash
+docker compose exec backend python -m src.tools.prune_tile_history_window --db /app/data/tile_history.db
+```
+
+Default keep window is exactly:
+- Start: `2026-07-22T06:00:00-04:00`
+- End: `2026-07-31T17:00:00-04:00`
+
+Equivalent UTC window used for filtering:
+- Start: `2026-07-22T10:00:00+00:00`
+- End: `2026-07-31T21:00:00+00:00`
+
+Optional flags:
+- `--start <ISO8601>` to override start time.
+- `--end <ISO8601>` to override end time.
+- `--no-vacuum` to skip final `VACUUM`.
+
 2. Start the stack:
 
 ```bash
