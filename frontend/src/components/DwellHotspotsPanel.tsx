@@ -84,6 +84,10 @@ function hotspotKey(lat: number, lon: number): string {
   return `${lat.toFixed(6)}:${lon.toFixed(6)}`;
 }
 
+function hotspotLabelWithCoords(label: string, latitude: number, longitude: number): string {
+  return `${label} (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`;
+}
+
 function isSelectedHotspot(sel: SelectedHotspot | null, lat: number, lon: number): boolean {
   if (!sel) return false;
   return hotspotKey(sel.latitude, sel.longitude) === hotspotKey(lat, lon);
@@ -222,7 +226,13 @@ function OverallHotspotList({ sortedOverall, selectedHotspot, selectMode, select
           <button
             type="button"
             className={isSelectedHotspot(selectedHotspot, cluster.latitude, cluster.longitude) ? "tile-details-item-button is-active" : "tile-details-item-button"}
-            onClick={() => onSelectHotspot({ latitude: cluster.latitude, longitude: cluster.longitude, label: cluster.locationLabel })}
+            onClick={() =>
+              onSelectHotspot({
+                latitude: cluster.latitude,
+                longitude: cluster.longitude,
+                label: hotspotLabelWithCoords(cluster.locationLabel, cluster.latitude, cluster.longitude),
+              })
+            }
           >
             <strong>{formatMinutes(cluster.minutesSpent)}</strong>
             <span>{cluster.visitCount} visits</span>
@@ -252,7 +262,13 @@ function TimelineVisitList({ sortedTimeline, selectedHotspot, selectMode, select
           <button
             type="button"
             className={isSelectedHotspot(selectedHotspot, visit.latitude, visit.longitude) ? "tile-details-item-button is-active" : "tile-details-item-button"}
-            onClick={() => onSelectHotspot({ latitude: visit.latitude, longitude: visit.longitude, label: visit.locationLabel })}
+            onClick={() =>
+              onSelectHotspot({
+                latitude: visit.latitude,
+                longitude: visit.longitude,
+                label: hotspotLabelWithCoords(visit.locationLabel, visit.latitude, visit.longitude),
+              })
+            }
           >
             <strong>{formatMinutes(visit.minutesSpent)}</strong>
             <span>{formatDateTime(visit.startObservedAt)} to {formatDateTime(visit.endObservedAt)}</span>

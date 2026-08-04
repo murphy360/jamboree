@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip, useMap } from "react-leaflet";
+import { Circle, CircleMarker, MapContainer, Polyline, TileLayer, Tooltip, useMap } from "react-leaflet";
 import { AreaPolygons } from "./AreaPolygons";
 import { ArcGISLayers } from "./ArcGISLayers";
 import type { TileDwellCluster, CustomArea } from "../hooks/useTileDetails";
@@ -116,15 +116,24 @@ export function TileDetailsMap({ history, dwellClusters, customAreas = [], selec
         <DwellClusterMarkers clusters={dwellClusters} maxMinutes={maxMinutes} />
         <AreaPolygons areas={customAreas} visibleLabels={visibleAreaLabels} onToggleLabel={toggleAreaLabel} />
         {selectedHotspot ? (
-          <CircleMarker
-            center={[selectedHotspot.latitude, selectedHotspot.longitude]}
-            radius={12}
-            pathOptions={{ color: "#0f172a", fillColor: "#facc15", fillOpacity: 0.9, weight: 3 }}
-          >
-            <Tooltip permanent direction="top" offset={[0, -10]}>
-              {selectedHotspot.label}
-            </Tooltip>
-          </CircleMarker>
+          <>
+            <Circle
+              center={[selectedHotspot.latitude, selectedHotspot.longitude]}
+              radius={35}
+              pathOptions={{ color: "#f59e0b", fillColor: "#fde68a", fillOpacity: 0.2, weight: 2 }}
+            />
+            <CircleMarker
+              center={[selectedHotspot.latitude, selectedHotspot.longitude]}
+              radius={12}
+              pathOptions={{ color: "#0f172a", fillColor: "#facc15", fillOpacity: 0.92, weight: 3 }}
+            >
+              <Tooltip permanent direction="top" offset={[0, -10]}>
+                {selectedHotspot.label}
+                <br />
+                {selectedHotspot.latitude.toFixed(5)}, {selectedHotspot.longitude.toFixed(5)}
+              </Tooltip>
+            </CircleMarker>
+          </>
         ) : null}
       </MapContainer>
     </section>
