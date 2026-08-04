@@ -20,6 +20,8 @@ type TileDetailsPageProps = {
 
 type DailyBreakdownProps = {
   details: TileDetails;
+  selectedDay: string;
+  onSelectDay: (day: string) => void;
 };
 
 type DetailsContentProps = {
@@ -131,7 +133,7 @@ export function TileDetailsPage({ details, loading, onBack, onTrackerRemoved, ba
   );
 }
 
-function DailyBreakdown({ details }: DailyBreakdownProps) {
+function DailyBreakdown({ details, selectedDay, onSelectDay }: DailyBreakdownProps) {
   if (details.daily_breakdown.length === 0) {
     return <p className="tile-list-empty">No daily activity yet.</p>;
   }
@@ -140,9 +142,15 @@ function DailyBreakdown({ details }: DailyBreakdownProps) {
     <ul className="tile-details-list">
       {details.daily_breakdown.map((day) => (
         <li key={day.date} className="tile-details-item">
-          <strong>{day.date}</strong>
-          <span>{day.point_count} points</span>
-          <span>{formatMinutes(day.total_span_minutes)} span</span>
+          <button
+            type="button"
+            className={selectedDay === day.date ? "tile-details-item-button is-active" : "tile-details-item-button"}
+            onClick={() => onSelectDay(day.date)}
+          >
+            <strong>{day.date}</strong>
+            <span>{day.point_count} points</span>
+            <span>{formatMinutes(day.total_span_minutes)} span</span>
+          </button>
         </li>
       ))}
     </ul>
@@ -161,6 +169,11 @@ function DetailsContent({ details, loading, onBack, onTrackerRemoved, baseUrl, t
     baseUrl,
     tileUuid,
     onRefresh: onRefreshDetails,
+  });
+  const { areas: globalAreas } = useCustomAreas({
+    baseUrl,
+    tileUuid: "global",
+    onRefresh: () => {},
   });
 
   const handleCreateArea = useCallback(
@@ -277,6 +290,20 @@ function DetailsContent({ details, loading, onBack, onTrackerRemoved, baseUrl, t
     [availableDays, selectedDay],
   );
 
+  const mapOverlayAreas = useMemo(() => {
+    const merged = new Map<string, (typeof details.custom_areas)[number]>();
+
+    for (const area of globalAreas) {
+      merged.set(`${area.tile_uuid}:${area.area_id}`, area);
+    }
+
+    for (const area of details.custom_areas) {
+      merged.set(`${area.tile_uuid}:${area.area_id}`, area);
+    }
+
+    return [...merged.values()];
+  }, [details.custom_areas, globalAreas]);
+
   const filteredDetails = useMemo((): TileDetails => {
     const usingAllDays = selectedDay === "all";
     const usingFullWindow = normalizedRange.startMs === null && normalizedRange.endMs === null;
@@ -304,6 +331,14 @@ function DetailsContent({ details, loading, onBack, onTrackerRemoved, baseUrl, t
 
   const handleDayChange = useCallback((value: string) => {
     setSelectedDay(value);
+    setSelectedHotspot(null);
+  }, []);
+
+  const handleBreakdownDayClick = useCallback((value: string) => {
+    setSelectedDay(value);
+    // Day clicks should show all points for that day, independent of start/end window.
+    setRangeStart("");
+    setRangeEnd("");
     setSelectedHotspot(null);
   }, []);
 
@@ -451,7 +486,7 @@ function DetailsContent({ details, loading, onBack, onTrackerRemoved, baseUrl, t
       <TileDetailsMap
         history={filteredDetails.items}
         dwellClusters={filteredDetails.dwell_clusters}
-        customAreas={filteredDetails.custom_areas}
+        customAreas={mapOverlayAreas}
         selectedHotspot={selectedHotspot}
         showGisLayers={showGisLayers}
       />
@@ -459,7 +494,7 @@ function DetailsContent({ details, loading, onBack, onTrackerRemoved, baseUrl, t
       <div className="tile-details-grids">
         <section>
           <h3 className="tile-details-subtitle">Daily breakdown</h3>
-          <DailyBreakdown details={details} />
+          <DailyBreakdown details={details} selectedDay={selectedDay} onSelectDay={handleBreakdownDayClick} />
         </section>
 
         <section>
