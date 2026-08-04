@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 from pathlib import Path
+import sqlite3
 
 from src.services.history_store import TileHistoryStore
 from src.services.models import TileLocation
@@ -61,3 +62,71 @@ def test_discover_backup_files_finds_all_bak_files(tmp_path) -> None:
         "tile_history.db.1.bak",
         "tile_history.db.2.bak",
     ]
+
+
+def test_merge_backups_into_primary_restores_custom_areas(tmp_path) -> None:
+    primary = tmp_path / "tile_history.db"
+    backup = tmp_path / "tile_history.db.areas.bak"
+
+    _record_points(primary, "device_tracker.tile_merge", [0])
+    _record_points(backup, "device_tracker.tile_merge", [1])
+
+    with sqlite3.connect(backup) as connection:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS custom_areas (
+                area_id TEXT PRIMARY KEY,
+                tile_uuid TEXT NOT NULL,
+                name TEXT NOT NULL,
+                polygon_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                source_type TEXT NOT NULL DEFAULT 'manual',
+                source_name TEXT,
+                source_url TEXT,
+                source_feature_id TEXT
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO custom_areas (
+                area_id,
+                tile_uuid,
+                name,
+                polygon_json,
+                created_at,
+                updated_at,
+                source_type,
+                source_name,
+                source_url,
+                source_feature_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "area-1",
+                "global",
+                "Recovered Area",
+                '[{"latitude": 38.0, "longitude": -81.0}, {"latitude": 38.001, "longitude": -81.0}, {"latitude": 38.0005, "longitude": -80.999}]',
+                "2026-07-01T00:00:00+00:00",
+                "2026-07-01T00:00:00+00:00",
+                "mymaps_kml_polygon",
+                "My Maps",
+                "https://example.com/kml",
+                "feature:1",
+            ),
+        )
+        connection.commit()
+
+    stats = merge_backups_into_primary(primary, [backup], run_vacuum=False)
+    assert stats.custom_area_rows == 1
+
+    with sqlite3.connect(primary) as connection:
+        row = connection.execute(
+            "SELECT name, tile_uuid FROM custom_areas WHERE area_id = ?",
+            ("area-1",),
+        ).fetchone()
+
+    assert row is not None
+    assert row[0] == "Recovered Area"
+    assert row[1] == "global"

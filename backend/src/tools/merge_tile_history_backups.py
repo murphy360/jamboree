@@ -27,11 +27,39 @@ DO UPDATE SET
     polled_at = excluded.polled_at
 """
 
+UPSERT_CUSTOM_AREAS_SQL = """
+INSERT INTO custom_areas (
+    area_id,
+    tile_uuid,
+    name,
+    polygon_json,
+    created_at,
+    updated_at,
+    source_type,
+    source_name,
+    source_url,
+    source_feature_id
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(area_id)
+DO UPDATE SET
+    tile_uuid = excluded.tile_uuid,
+    name = excluded.name,
+    polygon_json = excluded.polygon_json,
+    created_at = excluded.created_at,
+    updated_at = excluded.updated_at,
+    source_type = excluded.source_type,
+    source_name = excluded.source_name,
+    source_url = excluded.source_url,
+    source_feature_id = excluded.source_feature_id
+"""
+
 
 @dataclass(slots=True)
 class MergeStats:
     processed_files: int = 0
-    processed_rows: int = 0
+    history_rows: int = 0
+    custom_area_rows: int = 0
 
 
 def _ensure_primary_schema(connection: sqlite3.Connection) -> None:
@@ -60,6 +88,28 @@ def _ensure_primary_schema(connection: sqlite3.Connection) -> None:
         """
         CREATE UNIQUE INDEX IF NOT EXISTS idx_tile_history_tile_second
         ON tile_history (tile_uuid, observed_at_second)
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS custom_areas (
+            area_id TEXT PRIMARY KEY,
+            tile_uuid TEXT NOT NULL,
+            name TEXT NOT NULL,
+            polygon_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            source_type TEXT NOT NULL DEFAULT 'manual',
+            source_name TEXT,
+            source_url TEXT,
+            source_feature_id TEXT
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_custom_areas_tile
+        ON custom_areas (tile_uuid)
         """
     )
 
@@ -100,6 +150,28 @@ def _build_source_select(columns: set[str]) -> str:
     """
 
 
+def _build_custom_areas_select(columns: set[str]) -> str:
+    source_type_expr = "source_type" if "source_type" in columns else "'manual'"
+    source_name_expr = "source_name" if "source_name" in columns else "NULL"
+    source_url_expr = "source_url" if "source_url" in columns else "NULL"
+    source_feature_id_expr = "source_feature_id" if "source_feature_id" in columns else "NULL"
+
+    return f"""
+        SELECT
+            area_id,
+            tile_uuid,
+            name,
+            polygon_json,
+            created_at,
+            updated_at,
+            {source_type_expr} AS source_type,
+            {source_name_expr} AS source_name,
+            {source_url_expr} AS source_url,
+            {source_feature_id_expr} AS source_feature_id
+        FROM custom_areas
+    """
+
+
 def merge_backups_into_primary(
     primary_db: Path,
     backup_files: list[Path],
@@ -116,30 +188,56 @@ def merge_backups_into_primary(
         stats = MergeStats()
         for backup_path in backup_files:
             with sqlite3.connect(backup_path) as source:
-                if not _has_table(source, "tile_history"):
-                    continue
+                processed_any = False
 
-                columns = {
-                    row[1]
-                    for row in source.execute("PRAGMA table_info(tile_history)").fetchall()
-                }
+                if _has_table(source, "tile_history"):
+                    columns = {
+                        row[1]
+                        for row in source.execute("PRAGMA table_info(tile_history)").fetchall()
+                    }
 
-                required = {"tile_uuid", "latitude", "longitude", "observed_at"}
-                if not required.issubset(columns):
-                    continue
+                    required = {"tile_uuid", "latitude", "longitude", "observed_at"}
+                    if required.issubset(columns):
+                        select_sql = _build_source_select(columns)
+                        cursor = source.execute(select_sql)
 
-                select_sql = _build_source_select(columns)
-                cursor = source.execute(select_sql)
+                        while True:
+                            rows = cursor.fetchmany(batch_size)
+                            if not rows:
+                                break
+                            destination.executemany(UPSERT_SQL, rows)
+                            stats.history_rows += len(rows)
+                        processed_any = True
 
-                while True:
-                    rows = cursor.fetchmany(batch_size)
-                    if not rows:
-                        break
-                    destination.executemany(UPSERT_SQL, rows)
-                    stats.processed_rows += len(rows)
+                if _has_table(source, "custom_areas"):
+                    columns = {
+                        row[1]
+                        for row in source.execute("PRAGMA table_info(custom_areas)").fetchall()
+                    }
 
-                stats.processed_files += 1
-                destination.commit()
+                    required = {
+                        "area_id",
+                        "tile_uuid",
+                        "name",
+                        "polygon_json",
+                        "created_at",
+                        "updated_at",
+                    }
+                    if required.issubset(columns):
+                        select_sql = _build_custom_areas_select(columns)
+                        cursor = source.execute(select_sql)
+
+                        while True:
+                            rows = cursor.fetchmany(batch_size)
+                            if not rows:
+                                break
+                            destination.executemany(UPSERT_CUSTOM_AREAS_SQL, rows)
+                            stats.custom_area_rows += len(rows)
+                        processed_any = True
+
+                if processed_any:
+                    stats.processed_files += 1
+                    destination.commit()
 
         destination.execute("ANALYZE")
         if run_vacuum:
@@ -191,7 +289,8 @@ def main() -> int:
     )
     print(
         "Merge complete: "
-        f"files={stats.processed_files}, rows_processed={stats.processed_rows}, "
+        f"files={stats.processed_files}, history_rows={stats.history_rows}, "
+        f"custom_area_rows={stats.custom_area_rows}, "
         f"vacuum={'no' if args.no_vacuum else 'yes'}"
     )
     return 0
