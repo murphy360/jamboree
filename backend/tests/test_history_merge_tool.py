@@ -36,7 +36,7 @@ def test_merge_backups_into_primary_merges_rows_and_deduplicates(tmp_path) -> No
     stats = merge_backups_into_primary(primary, [backup_one, backup_two], run_vacuum=False)
 
     assert stats.processed_files == 2
-    assert stats.processed_rows == 4
+    assert stats.history_rows == 4
 
     store = TileHistoryStore(db_path=str(primary), max_points_per_tile=0)
     merged = store.get_history("device_tracker.tile_merge")
