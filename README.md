@@ -57,6 +57,10 @@ Google My Maps import behavior:
 - Replaces previously imported non-manual geometries while keeping manual areas intact.
 - Automatically merges configured prefix groups into canonical polygons after each sync (default: `BARR* -> Barrels`, `BOWS* -> Bows`).
 
+Proxy reliability note:
+- Frontend nginx now resolves `backend` through Docker DNS at runtime to prevent stale upstream IP errors after backend container restarts.
+- If you ever see transient `502 Bad Gateway` during deploy/restart windows, restart frontend once: `docker compose restart frontend`.
+
 Import-related endpoints:
 - `POST /imports/mymaps/sync` triggers an immediate KML sync.
 - `GET /map-features?tile_uuid=global` returns imported non-polygon map features (points/lines).
