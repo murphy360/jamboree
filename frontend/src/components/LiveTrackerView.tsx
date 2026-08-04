@@ -325,6 +325,8 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
   const [showNamedPoints, setShowNamedPoints] = useState(true);
   const [focusedHotspot, setFocusedHotspot] = useState<FocusedHotspot | null>(null);
   const [focusSignal, setFocusSignal] = useState(0);
+  const [focusedAreaIds, setFocusedAreaIds] = useState<string[]>([]);
+  const [areaFocusSignal, setAreaFocusSignal] = useState(0);
   const currentTimeMs = Date.now();
 
   const toggleAreaCollapse = (areaId: string) => {
@@ -417,6 +419,18 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
     setFocusedHotspot(null);
   }, []);
 
+  const focusedAreas = useMemo(
+    () => areas.filter((area) => focusedAreaIds.includes(area.area_id)),
+    [areas, focusedAreaIds],
+  );
+
+  const handleFocusAreas = useCallback((areaIds: string[]) => {
+    setFocusedAreaIds(areaIds);
+    if (areaIds.length > 0) {
+      setAreaFocusSignal((value) => value + 1);
+    }
+  }, []);
+
   return (
     <div className="live-tracker-view">
       <LiveMap
@@ -431,6 +445,8 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
         focusedHotspot={focusedHotspot}
         focusSignal={focusSignal}
         onFocusedHotspotHandled={handleFocusedHotspotHandled}
+        focusedAreas={focusedAreas}
+        areaFocusSignal={areaFocusSignal}
       />
 
       <div className="tabs">
@@ -555,6 +571,7 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
             onDelete={deleteArea}
             onDeleteMany={deleteAreas}
             onMergeAreas={mergeAreas}
+            onFocusAreas={handleFocusAreas}
           />
         </section>
       )}

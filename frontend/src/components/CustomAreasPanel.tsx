@@ -7,12 +7,14 @@ type CustomAreasPanelProps = {
   onDelete: (areaId: string) => Promise<void>;
   onDeleteMany: (areaIds: string[]) => Promise<void>;
   onMergeAreas: (targetAreaId: string, sourceAreaIds: string[]) => Promise<void>;
+  onFocusAreas?: (areaIds: string[]) => void;
 };
 
 type AreaRowProps = {
   area: CustomArea;
   selected: boolean;
   onToggleSelected: (areaId: string) => void;
+  onFocusArea?: (areaId: string) => void;
   onRename: (areaId: string, name: string) => Promise<void>;
   onDelete: (areaId: string) => Promise<void>;
 };
@@ -26,7 +28,7 @@ function formatMinutes(value: number): string {
   return minutes === 0 ? `${hours} hr` : `${hours} hr ${minutes} min`;
 }
 
-function AreaRow({ area, selected, onToggleSelected, onRename, onDelete }: AreaRowProps) {
+function AreaRow({ area, selected, onToggleSelected, onFocusArea, onRename, onDelete }: AreaRowProps) {
   const [editing, setEditing] = useState(false);
   const [nameInput, setNameInput] = useState(area.name);
   const [busy, setBusy] = useState(false);
@@ -84,7 +86,14 @@ function AreaRow({ area, selected, onToggleSelected, onRename, onDelete }: AreaR
               onChange={() => onToggleSelected(area.area_id)}
               aria-label={`Select ${area.name}`}
             />
-            <strong>{area.name}</strong>
+            <button
+              type="button"
+              className="tile-area-name-btn"
+              onClick={() => onFocusArea?.(area.area_id)}
+              title="Center map on this area"
+            >
+              {area.name}
+            </button>
             <span>{area.samples} samples</span>
             {area.minutes_spent > 0 && <span>{formatMinutes(area.minutes_spent)}</span>}
             <span>{area.polygon.length}-sided polygon</span>
@@ -103,7 +112,7 @@ function AreaRow({ area, selected, onToggleSelected, onRename, onDelete }: AreaR
   );
 }
 
-export function CustomAreasPanel({ areas, onRename, onDelete, onDeleteMany, onMergeAreas }: CustomAreasPanelProps) {
+export function CustomAreasPanel({ areas, onRename, onDelete, onDeleteMany, onMergeAreas, onFocusAreas }: CustomAreasPanelProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortMode, setSortMode] = useState<SortMode>("samples-desc");
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -138,16 +147,20 @@ export function CustomAreasPanel({ areas, onRename, onDelete, onDeleteMany, onMe
       } else {
         next.add(areaId);
       }
+      onFocusAreas?.(Array.from(next));
       return next;
     });
   };
 
   const selectAll = () => {
-    setSelectedIds(new Set(sortedAreas.map((area) => area.area_id)));
+    const next = new Set(sortedAreas.map((area) => area.area_id));
+    setSelectedIds(next);
+    onFocusAreas?.(Array.from(next));
   };
 
   const clearSelection = () => {
     setSelectedIds(new Set());
+    onFocusAreas?.([]);
   };
 
   const handleDeleteSelected = async () => {
@@ -184,6 +197,7 @@ export function CustomAreasPanel({ areas, onRename, onDelete, onDeleteMany, onMe
         sources.map((area) => area.area_id),
       );
       setSelectedIds(new Set([target.area_id]));
+      onFocusAreas?.([target.area_id]);
     } finally {
       setBulkBusy(false);
     }
@@ -245,6 +259,7 @@ export function CustomAreasPanel({ areas, onRename, onDelete, onDeleteMany, onMe
             area={area}
             selected={selectedIds.has(area.area_id)}
             onToggleSelected={toggleSelected}
+            onFocusArea={(areaId) => onFocusAreas?.([areaId])}
             onRename={onRename}
             onDelete={onDelete}
           />

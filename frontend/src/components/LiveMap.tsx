@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import type { Polygon as LeafletPolygon } from "leaflet";
+import { latLngBounds, type Polygon as LeafletPolygon } from "leaflet";
 import { CircleMarker, FeatureGroup, MapContainer, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { AreaPolygons } from "./AreaPolygons";
@@ -27,6 +27,8 @@ type LiveMapProps = {
   focusedHotspot?: { latitude: number; longitude: number; label: string } | null;
   focusSignal?: number;
   onFocusedHotspotHandled?: () => void;
+  focusedAreas?: CustomArea[];
+  areaFocusSignal?: number;
 };
 
 const DEFAULT_CENTER: [number, number] = [38.076, -81.073];
@@ -40,6 +42,11 @@ type FocusHotspotProps = {
   focusedHotspot: { latitude: number; longitude: number; label: string } | null;
   focusSignal: number;
   onHandled?: () => void;
+};
+
+type FocusAreasProps = {
+  focusedAreas: CustomArea[];
+  areaFocusSignal: number;
 };
 
 function FitToLocations({ locations, fitSignal }: FitToLocationsProps) {
@@ -106,6 +113,42 @@ function FocusHotspot({ focusedHotspot, focusSignal, onHandled }: FocusHotspotPr
     });
     onHandled?.();
   }, [focusedHotspot, focusSignal, map, onHandled]);
+
+  return null;
+}
+
+function FocusAreas({ focusedAreas, areaFocusSignal }: FocusAreasProps) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!focusedAreas.length) {
+      return;
+    }
+
+    const points: [number, number][] = [];
+    for (const area of focusedAreas) {
+      for (const point of area.polygon) {
+        points.push([point.latitude, point.longitude]);
+      }
+    }
+
+    if (!points.length) {
+      return;
+    }
+
+    if (points.length === 1) {
+      const [lat, lon] = points[0];
+      map.flyTo([lat, lon], Math.max(map.getZoom(), 17), { duration: 0.8 });
+      return;
+    }
+
+    map.flyToBounds(latLngBounds(points), {
+      animate: true,
+      duration: 0.8,
+      padding: [40, 40],
+      maxZoom: 18,
+    });
+  }, [focusedAreas, areaFocusSignal, map]);
 
   return null;
 }
@@ -256,6 +299,8 @@ export function LiveMap({
   focusedHotspot = null,
   focusSignal = 0,
   onFocusedHotspotHandled,
+  focusedAreas = [],
+  areaFocusSignal = 0,
 }: LiveMapProps) {
   const selected = findSelectedTile(locations, selectedTileUuid);
   const selectedMarkerColor = getSelectedMarkerColor(selected, tileColorByUuid);
@@ -278,6 +323,7 @@ export function LiveMap({
           focusSignal={focusSignal}
           onHandled={onFocusedHotspotHandled}
         />
+        <FocusAreas focusedAreas={focusedAreas} areaFocusSignal={areaFocusSignal} />
         <MapClickHandler onMapClick={onMapClick} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
