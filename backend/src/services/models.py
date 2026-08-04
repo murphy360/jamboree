@@ -122,6 +122,21 @@ class LeaderboardResponse(BaseModel):
     patch_trading_time: list[LeaderboardEntry]
 
 
+class TopAreaEntry(BaseModel):
+    rank: int
+    area_id: str
+    area_name: str
+    minutes_spent: int
+    samples: int
+    tiles_count: int
+
+
+class TopAreasResponse(BaseModel):
+    date: str | None
+    area_tile_uuid: str
+    items: list[TopAreaEntry]
+
+
 class UpdateAreaRequest(BaseModel):
     name: str
 
