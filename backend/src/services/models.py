@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class TileSummary(BaseModel):
@@ -83,8 +83,9 @@ class CustomArea(BaseModel):
 class CreateAreaRequest(BaseModel):
     name: str
     cluster_centers: list[AreaPolygonPoint]
-    hotspot_centers: list[AreaPolygonPoint] = []
+    hotspot_centers: list[AreaPolygonPoint] = Field(default_factory=list)
     merge_into_area_id: str | None = None
+    merge_source_area_ids: list[str] = Field(default_factory=list)
 
 
 class MapFeature(BaseModel):
