@@ -211,18 +211,65 @@ class TileHistoryStore:
             and previous["longitude"] == location.longitude
         )
 
-    def get_history(self, tile_uuid: str) -> list[TileLocation]:
+    def get_history(self, tile_uuid: str, limit: int | None = None) -> list[TileLocation]:
         with self._lock:
-            rows = self._connection.execute(
+            if limit and limit > 0:
+                rows = self._connection.execute(
+                    """
+                    SELECT tile_uuid, latitude, longitude, observed_at, label, tile_service_observed_at, polled_at
+                    FROM (
+                        SELECT tile_uuid, latitude, longitude, observed_at, label, tile_service_observed_at, polled_at
+                        FROM tile_history
+                        WHERE tile_uuid = ?
+                        ORDER BY observed_at DESC
+                        LIMIT ?
+                    ) recent
+                    ORDER BY observed_at ASC
+                    """,
+                    (tile_uuid, limit),
+                ).fetchall()
+            else:
+                rows = self._connection.execute(
+                    """
+                    SELECT tile_uuid, latitude, longitude, observed_at, label, tile_service_observed_at, polled_at
+                    FROM tile_history
+                    WHERE tile_uuid = ?
+                    ORDER BY observed_at ASC
+                    """,
+                    (tile_uuid,),
+                ).fetchall()
+        return [TileLocation.model_validate(dict(row)) for row in rows]
+
+    def get_history_summary(self, tile_uuid: str) -> tuple[int, str | None, str | None, str | None]:
+        """Return total count, first observed_at, last observed_at, and latest label."""
+        with self._lock:
+            aggregate = self._connection.execute(
                 """
-                SELECT tile_uuid, latitude, longitude, observed_at, label, tile_service_observed_at, polled_at
+                SELECT COUNT(*) AS total_points,
+                       MIN(observed_at) AS first_observed_at,
+                       MAX(observed_at) AS last_observed_at
                 FROM tile_history
                 WHERE tile_uuid = ?
-                ORDER BY observed_at ASC
                 """,
                 (tile_uuid,),
-            ).fetchall()
-        return [TileLocation.model_validate(dict(row)) for row in rows]
+            ).fetchone()
+
+            latest = self._connection.execute(
+                """
+                SELECT label
+                FROM tile_history
+                WHERE tile_uuid = ?
+                ORDER BY observed_at DESC, rowid DESC
+                LIMIT 1
+                """,
+                (tile_uuid,),
+            ).fetchone()
+
+        total_points = int(aggregate["total_points"]) if aggregate else 0
+        first_observed_at = aggregate["first_observed_at"] if aggregate else None
+        last_observed_at = aggregate["last_observed_at"] if aggregate else None
+        latest_label = latest["label"] if latest else None
+        return total_points, first_observed_at, last_observed_at, latest_label
 
     def get_latest_locations(self) -> list[TileLocation]:
         with self._lock:

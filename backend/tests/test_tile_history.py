@@ -416,3 +416,71 @@ def test_build_dwell_clusters_merges_near_points_within_default_50m(tmp_path) ->
 
     assert len(clusters_default) == 2
     assert len(clusters_wide) == 1
+
+
+def test_tile_history_endpoint_applies_limit_and_reports_truncation(tmp_path) -> None:
+    original_store = getattr(app.state, "history_store", None)
+    history_store = build_history_store(tmp_path, "limit-history.db")
+    history_store.record(
+        [
+            TileLocation(
+                tile_uuid="device_tracker.tile_limit",
+                latitude=38.0 + (index * 0.001),
+                longitude=-81.0 - (index * 0.001),
+                observed_at=datetime(2026, 5, 22, 10, index, tzinfo=UTC),
+                label="Tile Limit",
+            )
+            for index in range(5)
+        ]
+    )
+    app.state.history_store = history_store
+
+    try:
+        client = TestClient(app)
+        response = client.get("/tiles/device_tracker.tile_limit/history?limit=2")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["total_points"] == 5
+        assert payload["returned_points"] == 2
+        assert payload["history_truncated"] is True
+        assert payload["items"][0]["observed_at"] == "2026-05-22T10:03:00Z"
+        assert payload["items"][1]["observed_at"] == "2026-05-22T10:04:00Z"
+    finally:
+        app.state.history_store = original_store
+
+
+def test_tile_details_endpoint_applies_history_limit_and_reports_truncation(tmp_path) -> None:
+    original_store = getattr(app.state, "history_store", None)
+    history_store = build_history_store(tmp_path, "limit-details.db")
+    history_store.record(
+        [
+            TileLocation(
+                tile_uuid="device_tracker.tile_limit_details",
+                latitude=38.2 + (index * 0.0001),
+                longitude=-81.2 - (index * 0.0001),
+                observed_at=datetime(2026, 5, 23, 9, index, tzinfo=UTC),
+                label="Tile Limit Details",
+            )
+            for index in range(6)
+        ]
+    )
+    app.state.history_store = history_store
+
+    try:
+        client = TestClient(app)
+        response = client.get(
+            "/tiles/device_tracker.tile_limit_details/details?history_limit=3"
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["total_points"] == 6
+        assert payload["returned_points"] == 3
+        assert payload["history_truncated"] is True
+        assert payload["first_observed_at"] == "2026-05-23T09:00:00Z"
+        assert payload["last_observed_at"] == "2026-05-23T09:05:00Z"
+        assert len(payload["items"]) == 3
+        assert payload["items"][0]["observed_at"] == "2026-05-23T09:03:00Z"
+    finally:
+        app.state.history_store = original_store

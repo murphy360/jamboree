@@ -76,13 +76,29 @@ async def latest_locations(request: Request) -> list[TileLocation]:
 
 
 @router.get("/tiles/{tile_uuid}/history", response_model=TileHistoryResponse)
-async def tile_history(tile_uuid: str, request: Request) -> TileHistoryResponse:
+async def tile_history(
+    tile_uuid: str,
+    request: Request,
+    limit: int | None = Query(default=None, ge=1, le=50000),
+) -> TileHistoryResponse:
     history_store = request.app.state.history_store
-    history = history_store.get_history(tile_uuid)
+    settings = get_settings()
+    effective_limit = limit if limit is not None else settings.tile_history_api_default_limit
+
+    summary = history_store.get_history_summary(tile_uuid)
+    total_points, _, _, latest_label = summary
+    history = history_store.get_history(tile_uuid, limit=effective_limit)
     if not history:
         raise HTTPException(status_code=404, detail="Tile history not found")
 
-    return TileHistoryResponse(tile_uuid=tile_uuid, label=history[-1].label, items=history)
+    return TileHistoryResponse(
+        tile_uuid=tile_uuid,
+        label=latest_label or history[-1].label,
+        total_points=total_points,
+        returned_points=len(history),
+        history_truncated=total_points > len(history),
+        items=history,
+    )
 
 
 @router.get("/tiles/{tile_uuid}/details", response_model=TileDetailsResponse)
@@ -90,11 +106,17 @@ async def tile_details(
     tile_uuid: str,
     request: Request,
     dwell_merge_meters: float | None = Query(default=None, ge=5, le=500),
+    history_limit: int | None = Query(default=None, ge=1, le=50000),
 ) -> TileDetailsResponse:
     history_store = request.app.state.history_store
     area_store = request.app.state.area_store
     settings = get_settings()
-    history = history_store.get_history(tile_uuid)
+    effective_limit = (
+        history_limit if history_limit is not None else settings.tile_details_api_default_limit
+    )
+    summary = history_store.get_history_summary(tile_uuid)
+    total_points, first_observed_at, last_observed_at, latest_label = summary
+    history = history_store.get_history(tile_uuid, limit=effective_limit)
     if not history:
         raise HTTPException(status_code=404, detail="Tile history not found")
 
@@ -104,10 +126,12 @@ async def tile_details(
 
     return TileDetailsResponse(
         tile_uuid=tile_uuid,
-        label=history[-1].label,
-        total_points=len(history),
-        first_observed_at=history[0].observed_at,
-        last_observed_at=history[-1].observed_at,
+        label=latest_label or history[-1].label,
+        total_points=total_points,
+        returned_points=len(history),
+        history_truncated=total_points > len(history),
+        first_observed_at=first_observed_at or history[0].observed_at,
+        last_observed_at=last_observed_at or history[-1].observed_at,
         items=history,
         daily_breakdown=history_store.build_daily_breakdown(history),
         dwell_clusters=history_store.build_dwell_clusters(

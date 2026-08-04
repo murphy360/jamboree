@@ -40,6 +40,8 @@ export type TileDetails = {
   tile_uuid: string;
   label: string;
   total_points: number;
+  returned_points: number;
+  history_truncated: boolean;
   first_observed_at: string;
   last_observed_at: string;
   items: TileLocation[];
@@ -47,6 +49,18 @@ export type TileDetails = {
   dwell_clusters: TileDwellCluster[];
   custom_areas: CustomArea[];
 };
+
+const DEFAULT_TILE_DETAILS_HISTORY_LIMIT = Number(
+  import.meta.env.VITE_TILE_DETAILS_HISTORY_LIMIT ?? "3000",
+);
+
+function buildDetailsUrl(baseUrl: string, tileUuid: string): string {
+  const url = new URL(`${baseUrl}/tiles/${encodeURIComponent(tileUuid)}/details`, window.location.origin);
+  if (Number.isFinite(DEFAULT_TILE_DETAILS_HISTORY_LIMIT) && DEFAULT_TILE_DETAILS_HISTORY_LIMIT > 0) {
+    url.searchParams.set("history_limit", String(DEFAULT_TILE_DETAILS_HISTORY_LIMIT));
+  }
+  return url.toString();
+}
 
 export function useTileDetails(
   baseUrl: string,
@@ -71,7 +85,7 @@ export function useTileDetails(
       setLoading(true);
       try {
         const response = await fetch(
-          `${normalizedBaseUrl}/tiles/${encodeURIComponent(tileUuid)}/details`,
+          buildDetailsUrl(normalizedBaseUrl, tileUuid),
         );
 
         if (!response.ok) {

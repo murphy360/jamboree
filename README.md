@@ -27,6 +27,8 @@ Set these values in `backend/.env`:
 - `HOME_ASSISTANT_REQUIRE_HASH` (`true` by default; only includes trackers with `#` in name/identifier fields)
 - `TILE_HISTORY_DB_PATH` (`/app/data/tile_history.db` by default; persisted to `backend/data` via Docker volume)
 - `TILE_HISTORY_MAX_POINTS_PER_TILE` (`0` by default for unlimited retention; set a positive value to cap stored points per tile)
+- `TILE_HISTORY_API_DEFAULT_LIMIT` (`0` by default; default `limit` applied to `GET /tiles/{tile_uuid}/history` when query param is omitted)
+- `TILE_DETAILS_API_DEFAULT_LIMIT` (`3000` by default; default `history_limit` applied to `GET /tiles/{tile_uuid}/details` when query param is omitted)
 - `TILE_DWELL_MERGE_RADIUS_METERS` (`50` by default; merges nearby dwell hotspots into one cluster)
 - `MYMAPS_IMPORT_ENABLED` (`true` by default; enables Google My Maps KML sync)
 - `MYMAPS_KML_URL` (KML feed URL used for imports)
@@ -35,6 +37,15 @@ Set these values in `backend/.env`:
 
 Tile details endpoint supports runtime override for hotspot merge distance:
 - `GET /tiles/{tile_uuid}/details?dwell_merge_meters=50`
+
+History-heavy endpoints support runtime point limits:
+- `GET /tiles/{tile_uuid}/history?limit=2000`
+- `GET /tiles/{tile_uuid}/details?history_limit=2000`
+
+Both responses now include:
+- `total_points`: full number of stored points for the tile.
+- `returned_points`: number of points returned in the current response.
+- `history_truncated`: `true` when limits reduced the returned history.
 
 Remove a tracker and all locally stored history/custom areas:
 - `DELETE /tiles/{tile_uuid}`
@@ -49,6 +60,21 @@ Import-related endpoints:
 - `GET /map-features?tile_uuid=global` returns imported non-polygon map features (points/lines).
 
 If `HOME_ASSISTANT_TILE_ENTITIES` is empty, backend auto-discovers Tile trackers by scanning `device_tracker.*` entities that include `tile` in entity id or friendly name.
+
+### Tile History Backup Merge Tool
+
+If you rotated history databases to `.bak` files, merge them back into the primary DB with:
+
+```bash
+docker compose exec backend python -m src.tools.merge_tile_history_backups --db /app/data/tile_history.db
+```
+
+Optional flags:
+- `--pattern "*.bak"` to control which backup files are merged.
+- `--no-vacuum` to skip final `VACUUM`.
+
+Frontend detail-page history fetch size is controlled by:
+- `VITE_TILE_DETAILS_HISTORY_LIMIT` (default `3000`)
 
 2. Start the stack:
 

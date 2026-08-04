@@ -39,6 +39,9 @@ class TileLocation(BaseModel):
 class TileHistoryResponse(BaseModel):
     tile_uuid: str
     label: str
+    total_points: int
+    returned_points: int
+    history_truncated: bool = False
     items: list[TileLocation]
 
 
@@ -127,6 +130,8 @@ class TileDetailsResponse(BaseModel):
     tile_uuid: str
     label: str
     total_points: int
+    returned_points: int
+    history_truncated: bool = False
     first_observed_at: datetime
     last_observed_at: datetime
     items: list[TileLocation]

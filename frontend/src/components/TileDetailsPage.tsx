@@ -198,6 +198,13 @@ function DetailsContent({ details, onBack, onTrackerRemoved, baseUrl, tileUuid, 
         </article>
       </div>
 
+      {details.history_truncated ? (
+        <p className="tile-history-meta">
+          Loaded {details.returned_points.toLocaleString()} of {details.total_points.toLocaleString()} points
+          to keep the page responsive. Increase VITE_TILE_DETAILS_HISTORY_LIMIT to load more.
+        </p>
+      ) : null}
+
       <h3 className="tile-details-subtitle">All-time track and dwell intensity</h3>
       <TileDetailsMap
         history={details.items}
