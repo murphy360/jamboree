@@ -22,6 +22,7 @@ type DailyBreakdownProps = {
 
 type DetailsContentProps = {
   details: TileDetails;
+  loading: boolean;
   onBack: () => void;
   onTrackerRemoved: () => void;
   baseUrl: string;
@@ -59,7 +60,7 @@ function formatMinutes(value: number): string {
 }
 
 export function TileDetailsPage({ details, loading, onBack, onTrackerRemoved, baseUrl, tileUuid, onRefreshDetails, showGisLayers }: TileDetailsPageProps) {
-  if (loading) {
+  if (loading && !details) {
     return (
       <section className="tile-details-panel">
         <button type="button" className="tile-details-back" onClick={onBack}>
@@ -84,6 +85,7 @@ export function TileDetailsPage({ details, loading, onBack, onTrackerRemoved, ba
   return (
     <DetailsContent
       details={details}
+      loading={loading}
       onBack={onBack}
       onTrackerRemoved={onTrackerRemoved}
       baseUrl={baseUrl}
@@ -113,7 +115,7 @@ function DailyBreakdown({ details }: DailyBreakdownProps) {
 }
 
 
-function DetailsContent({ details, onBack, onTrackerRemoved, baseUrl, tileUuid, onRefreshDetails, showGisLayers }: DetailsContentProps) {
+function DetailsContent({ details, loading, onBack, onTrackerRemoved, baseUrl, tileUuid, onRefreshDetails, showGisLayers }: DetailsContentProps) {
   const [selectedHotspot, setSelectedHotspot] = useState<SelectedHotspot | null>(null);
   const [deletePending, setDeletePending] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -182,6 +184,12 @@ function DetailsContent({ details, onBack, onTrackerRemoved, baseUrl, tileUuid, 
       </div>
 
       {deleteError ? <p className="tile-details-error">{deleteError}</p> : null}
+
+      {loading ? (
+        <p className="tile-history-meta">
+          Showing current position now. Full historical details are still loading in the background.
+        </p>
+      ) : null}
 
       <div className="tile-details-stats">
         <article>

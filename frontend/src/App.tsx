@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { LiveTrackerView } from "./components/LiveTrackerView";
 import { useSystemStatus } from "./hooks/useSystemStatus";
 import { useTileDetails } from "./hooks/useTileDetails";
@@ -16,7 +16,16 @@ export function App() {
   const [detailsTileUuid, setDetailsTileUuid] = useState<string | null>(null);
   const [detailsRefreshKey, setDetailsRefreshKey] = useState(0);
   const showGisLayers = false;
-  const { details, loading: detailsLoading } = useTileDetails(BACKEND_URL, detailsTileUuid, detailsRefreshKey);
+  const selectedLiveTile = useMemo(
+    () => (detailsTileUuid ? locations.find((tile) => tile.tile_uuid === detailsTileUuid) ?? null : null),
+    [detailsTileUuid, locations],
+  );
+  const { details, loading: detailsLoading } = useTileDetails(
+    BACKEND_URL,
+    detailsTileUuid,
+    detailsRefreshKey,
+    selectedLiveTile,
+  );
   const handleRefreshDetails = useCallback(() => setDetailsRefreshKey((k) => k + 1), []);
 
   const handleOpenDetails = (tileUuid: string) => {

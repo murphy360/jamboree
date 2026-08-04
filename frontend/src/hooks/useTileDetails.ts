@@ -66,6 +66,7 @@ export function useTileDetails(
   baseUrl: string,
   tileUuid: string | null,
   refreshKey = 0,
+  initialLocation: TileLocation | null = null,
 ) {
   const [details, setDetails] = useState<TileDetails | null>(null);
   const [loading, setLoading] = useState(false);
@@ -80,6 +81,22 @@ export function useTileDetails(
     }
 
     let cancelled = false;
+
+    if (initialLocation && initialLocation.tile_uuid === tileUuid) {
+      setDetails({
+        tile_uuid: tileUuid,
+        label: initialLocation.label,
+        total_points: 1,
+        returned_points: 1,
+        history_truncated: false,
+        first_observed_at: initialLocation.observed_at,
+        last_observed_at: initialLocation.observed_at,
+        items: [initialLocation],
+        daily_breakdown: [],
+        dwell_clusters: [],
+        custom_areas: [],
+      });
+    }
 
     const loadDetails = async () => {
       setLoading(true);
@@ -97,9 +114,7 @@ export function useTileDetails(
           setDetails(payload);
         }
       } catch {
-        if (!cancelled) {
-          setDetails(null);
-        }
+        // Keep seeded/current details visible if full history loading fails.
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -112,7 +127,7 @@ export function useTileDetails(
     return () => {
       cancelled = true;
     };
-  }, [normalizedBaseUrl, tileUuid, refreshKey]);
+  }, [normalizedBaseUrl, tileUuid, refreshKey, initialLocation]);
 
   return { details, loading };
 }
