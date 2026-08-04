@@ -16,6 +16,7 @@ import { LiveMap } from "./LiveMap";
 import { LeaderboardPanel } from "./LeaderboardPanel";
 import { CustomAreasPanel } from "./CustomAreasPanel";
 import { TopHotspotsPanel } from "./TopHotspotsPanel";
+import { TopAreasPanel } from "./TopAreasPanel";
 
 type LiveTrackerViewProps = {
   backendUrl: string;
@@ -24,7 +25,7 @@ type LiveTrackerViewProps = {
   showGisLayers: boolean;
 };
 
-type TileListMode = "all" | "stale" | "areas" | "moving" | "hotspots" | "leaderboard" | "area-editor";
+type TileListMode = "all" | "stale" | "areas" | "moving" | "hotspots" | "top-areas" | "leaderboard" | "area-editor";
 
 type FocusedHotspot = {
   latitude: number;
@@ -464,6 +465,12 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
           Top Hotspots
         </button>
         <button
+          className={tileListMode === "top-areas" ? "is-active" : ""}
+          onClick={() => setTileListMode("top-areas")}
+        >
+          Top Areas
+        </button>
+        <button
           className={tileListMode === "leaderboard" ? "is-active" : ""}
           onClick={() => setTileListMode("leaderboard")}
         >
@@ -520,6 +527,10 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
           locations={locations}
           onSelectHotspot={handleSelectTopHotspot}
         />
+      )}
+
+      {tileListMode === "top-areas" && (
+        <TopAreasPanel groups={groupedTiles.groups} totalActiveTiles={locations.length} />
       )}
 
       {tileListMode === "leaderboard" && <LeaderboardPanel backendUrl={backendUrl} />}
