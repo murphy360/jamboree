@@ -20,6 +20,7 @@ class HomeAssistantTileClient:
         "tile_updated_at",
         "last_location_update",
     )
+    _HTTP_TIMEOUT = httpx.Timeout(8.0, connect=3.0)
 
     def __init__(
         self,
@@ -56,7 +57,7 @@ class HomeAssistantTileClient:
         }
 
     async def _fetch_states(self) -> list[dict[str, Any]]:
-        async with httpx.AsyncClient(timeout=20) as client:
+        async with httpx.AsyncClient(timeout=self._HTTP_TIMEOUT) as client:
             response = await client.get(f"{self.base_url}/api/states", headers=self._headers())
             response.raise_for_status()
             data = response.json()
@@ -66,7 +67,7 @@ class HomeAssistantTileClient:
         return []
 
     async def _fetch_state(self, entity_id: str) -> dict[str, Any] | None:
-        async with httpx.AsyncClient(timeout=20) as client:
+        async with httpx.AsyncClient(timeout=self._HTTP_TIMEOUT) as client:
             response = await client.get(
                 f"{self.base_url}/api/states/{entity_id}",
                 headers=self._headers(),

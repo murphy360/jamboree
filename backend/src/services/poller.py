@@ -34,12 +34,18 @@ class TilePoller:
         self._shutdown = asyncio.Event()
         self._poll_lock = asyncio.Lock()
         self._latest_cache: list[TileLocation] = []
+        self._source_ok = False
+        self._source_tile_count = 0
+        self._source_detail = "Tile source not checked yet"
 
     def get_cached_latest_locations(self) -> list[TileLocation]:
         return list(self._latest_cache)
 
     def clear_cached_latest_locations(self) -> None:
         self._latest_cache = []
+
+    def get_source_status(self) -> tuple[bool, int, str]:
+        return (self._source_ok, self._source_tile_count, self._source_detail)
 
     async def stop(self) -> None:
         self._shutdown.set()
@@ -76,6 +82,9 @@ class TilePoller:
             now = datetime.now().strftime("%H:%M:%S")
             print(f"[{now}] === POLLER: Starting poll cycle")
             tiles = await self.tile_client.list_tiles()
+            self._source_ok = True
+            self._source_tile_count = len(tiles)
+            self._source_detail = "Tracker source reachable"
             print(f"[{now}] === POLLER: found {len(tiles)} tiles")
             updates: list[TileLocation] = []
             for tile in tiles:
@@ -108,5 +117,8 @@ class TilePoller:
             print(f"[{now}] === POLLER: Poll cycle complete")
         except Exception as exc:
             now = datetime.now().strftime("%H:%M:%S")
+            self._source_ok = False
+            self._source_tile_count = 0
+            self._source_detail = f"Tile API error: {str(exc)[:280]}"
             print(f"[{now}] === POLLER ERROR: {exc}")
             LOGGER.exception("Tile polling error: %s", exc)

@@ -29,22 +29,9 @@ async def health() -> HealthResponse:
 
 @router.get("/debug/tile-status", response_model=TileStatusResponse)
 async def tile_status(request: Request) -> TileStatusResponse:
-    tile_client = request.app.state.tile_client
-    try:
-        tiles = await asyncio.wait_for(tile_client.list_tiles(), timeout=TILE_STATUS_TIMEOUT_SECONDS)
-        return TileStatusResponse(ok=True, tile_count=len(tiles), detail="Tracker source reachable")
-    except asyncio.TimeoutError:
-        return TileStatusResponse(
-            ok=False,
-            tile_count=0,
-            detail="Tile API request timed out",
-        )
-    except Exception as exc:
-        return TileStatusResponse(
-            ok=False,
-            tile_count=0,
-            detail=f"Tile API error: {str(exc)[:280]}",
-        )
+    poller = request.app.state.poller
+    ok, tile_count, detail = poller.get_source_status()
+    return TileStatusResponse(ok=ok, tile_count=tile_count, detail=detail)
 
 
 @router.get("/debug/tile-timestamps")
