@@ -437,6 +437,15 @@ body {
   font: inherit;
 }
 
+.tile-details-filter input[type="datetime-local"] {
+  border: 1px solid #cbd5e1;
+  border-radius: 0.55rem;
+  background: #f8fafc;
+  color: #0f172a;
+  padding: 0.42rem 0.55rem;
+  font: inherit;
+}
+
 .tile-details-list-ranked {
   counter-reset: hotlist;
 }
