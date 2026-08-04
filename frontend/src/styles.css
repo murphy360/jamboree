@@ -657,14 +657,17 @@ body {
 
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   background: #f1f5f9;
   border: 1px solid #cbd5e1;
   border-radius: 0.65rem;
   padding: 0.35rem;
+  overflow-x: auto;
 }
 
 .tabs button {
+  flex: 0 0 auto;
   border: 1px solid transparent;
   border-radius: 0.5rem;
   background: transparent;
