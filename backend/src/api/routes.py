@@ -52,6 +52,11 @@ async def tile_timestamps(request: Request) -> dict:
 async def latest_locations(request: Request) -> list[TileLocation]:
     history_store = request.app.state.history_store
     poller = request.app.state.poller
+
+    cached = poller.get_cached_latest_locations()
+    if cached:
+        return cached
+
     try:
         return await asyncio.wait_for(
             asyncio.to_thread(history_store.get_latest_locations),
@@ -73,9 +78,21 @@ async def tile_history(
     settings = get_settings()
     effective_limit = limit if limit is not None else settings.tile_history_api_default_limit
 
-    summary = history_store.get_history_summary(tile_uuid)
+    try:
+        summary = await asyncio.wait_for(
+            asyncio.to_thread(history_store.get_history_summary, tile_uuid),
+            timeout=HISTORY_IO_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Timed out loading tile history summary")
     total_points, _, _, latest_label = summary
-    history = history_store.get_history(tile_uuid, limit=effective_limit)
+    try:
+        history = await asyncio.wait_for(
+            asyncio.to_thread(history_store.get_history, tile_uuid, effective_limit),
+            timeout=HISTORY_IO_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Timed out loading tile history")
     if not history:
         raise HTTPException(status_code=404, detail="Tile history not found")
 
@@ -102,14 +119,32 @@ async def tile_details(
     effective_limit = (
         history_limit if history_limit is not None else settings.tile_details_api_default_limit
     )
-    summary = history_store.get_history_summary(tile_uuid)
+    try:
+        summary = await asyncio.wait_for(
+            asyncio.to_thread(history_store.get_history_summary, tile_uuid),
+            timeout=HISTORY_IO_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Timed out loading tile details summary")
     total_points, first_observed_at, last_observed_at, latest_label = summary
-    history = history_store.get_history(tile_uuid, limit=effective_limit)
+    try:
+        history = await asyncio.wait_for(
+            asyncio.to_thread(history_store.get_history, tile_uuid, effective_limit),
+            timeout=HISTORY_IO_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Timed out loading tile details history")
     if not history:
         raise HTTPException(status_code=404, detail="Tile history not found")
 
     merge_radius_meters = dwell_merge_meters or settings.tile_dwell_merge_radius_meters
-    areas = area_store.get_areas(tile_uuid)
+    try:
+        areas = await asyncio.wait_for(
+            asyncio.to_thread(area_store.get_areas, tile_uuid),
+            timeout=HISTORY_IO_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        areas = []
     areas_with_stats = area_store.compute_area_stats(history, areas)
 
     return TileDetailsResponse(
@@ -133,8 +168,31 @@ async def tile_details(
 async def list_areas(tile_uuid: str, request: Request) -> list[CustomArea]:
     area_store = request.app.state.area_store
     history_store = request.app.state.history_store
-    areas = area_store.get_areas(tile_uuid)
-    history = history_store.get_history(tile_uuid)
+
+    try:
+        areas = await asyncio.wait_for(
+            asyncio.to_thread(area_store.get_areas, tile_uuid),
+            timeout=HISTORY_IO_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        return []
+    except Exception:
+        return []
+
+    # Global map overlays only need polygon geometry; skip heavy history scan here.
+    if tile_uuid == "global":
+        return areas
+
+    try:
+        history = await asyncio.wait_for(
+            asyncio.to_thread(history_store.get_history, tile_uuid),
+            timeout=HISTORY_IO_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        return areas
+    except Exception:
+        return areas
+
     return area_store.compute_area_stats(history, areas)
 
 
@@ -172,7 +230,15 @@ async def create_area(
 @router.get("/map-features", response_model=list[MapFeature])
 async def map_features(request: Request, tile_uuid: str = Query(default="global")) -> list[MapFeature]:
     feature_store = request.app.state.map_feature_store
-    return feature_store.list_features(tile_uuid=tile_uuid)
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(feature_store.list_features, tile_uuid=tile_uuid),
+            timeout=HISTORY_IO_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        return []
+    except Exception:
+        return []
 
 
 @router.post("/imports/mymaps/sync", response_model=MyMapsSyncResponse)

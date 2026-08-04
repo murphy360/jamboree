@@ -187,13 +187,15 @@ async def locations_ws(websocket: WebSocket) -> None:
         # Send the latest stored locations immediately so the UI does not wait for the next poll.
         now = datetime.now().strftime("%H:%M:%S")
         print(f"[{now}] === WS: Sending initial latest locations message", flush=True)
-        try:
-            latest_locations = await asyncio.wait_for(
-                asyncio.to_thread(history_store.get_latest_locations),
-                timeout=WS_INITIAL_SNAPSHOT_TIMEOUT_SECONDS,
-            )
-        except asyncio.TimeoutError:
-            latest_locations = []
+        latest_locations = poller.get_cached_latest_locations()
+        if not latest_locations:
+            try:
+                latest_locations = await asyncio.wait_for(
+                    asyncio.to_thread(history_store.get_latest_locations),
+                    timeout=WS_INITIAL_SNAPSHOT_TIMEOUT_SECONDS,
+                )
+            except asyncio.TimeoutError:
+                latest_locations = []
         await websocket.send_json({
             "type": "tile_locations",
             "items": jsonable_encoder(latest_locations),
