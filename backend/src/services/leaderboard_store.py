@@ -7,7 +7,12 @@ from time import monotonic
 
 from src.services.area_store import AreaStore
 from src.services.history_store import TileHistoryStore, _haversine_meters
-from src.services.models import LeaderboardEntry, LeaderboardResponse
+from src.services.models import (
+    LeaderboardEntry,
+    LeaderboardResponse,
+    TopAreaEntry,
+    TopAreasResponse,
+)
 
 
 class LeaderboardStore:
@@ -24,10 +29,12 @@ class LeaderboardStore:
         self._cache_ttl_seconds = max(0, cache_ttl_seconds)
         self._cache_lock = Lock()
         self._cache: dict[str, tuple[float, LeaderboardResponse]] = {}
+        self._top_areas_cache: dict[str, tuple[float, TopAreasResponse]] = {}
 
     def invalidate_cache(self) -> None:
         with self._cache_lock:
             self._cache.clear()
+            self._top_areas_cache.clear()
 
     def get_leaderboard(self, date: str | None = None) -> LeaderboardResponse:
         cache_key = date or "__overall__"
@@ -85,6 +92,90 @@ class LeaderboardStore:
         if self._cache_ttl_seconds > 0:
             with self._cache_lock:
                 self._cache[cache_key] = (monotonic(), response.model_copy(deep=True))
+
+        return response
+
+    def get_top_areas(
+        self,
+        date: str | None = None,
+        limit: int = 20,
+        area_tile_uuid: str = "global",
+    ) -> TopAreasResponse:
+        safe_limit = max(1, limit)
+        cache_key = f"top-areas::{area_tile_uuid}::{date or '__overall__'}::{safe_limit}"
+        if self._cache_ttl_seconds > 0:
+            with self._cache_lock:
+                cached = self._top_areas_cache.get(cache_key)
+                if cached:
+                    cached_at, cached_response = cached
+                    if monotonic() - cached_at <= self._cache_ttl_seconds:
+                        return cached_response.model_copy(deep=True)
+
+        areas = self._area_store.get_areas(area_tile_uuid)
+        if not areas:
+            return TopAreasResponse(date=date, area_tile_uuid=area_tile_uuid, items=[])
+
+        area_totals: dict[str, dict[str, object]] = {
+            area.area_id: {
+                "area_name": area.name,
+                "minutes_spent": 0,
+                "samples": 0,
+                "tile_uuids": set(),
+            }
+            for area in areas
+        }
+
+        for tile_uuid, _label in self._history_store.get_all_tile_identifiers():
+            history = self._history_store.get_history(
+                tile_uuid,
+                limit=self._history_points_limit if self._history_points_limit > 0 else None,
+            )
+            if date:
+                history = [p for p in history if p.observed_at.date().isoformat() == date]
+            if not history:
+                continue
+
+            stats = self._area_store.compute_area_stats(history, areas)
+            for area_stat in stats:
+                if area_stat.minutes_spent <= 0 and area_stat.samples <= 0:
+                    continue
+                bucket = area_totals.get(area_stat.area_id)
+                if not bucket:
+                    continue
+                bucket["minutes_spent"] = int(bucket["minutes_spent"]) + area_stat.minutes_spent
+                bucket["samples"] = int(bucket["samples"]) + area_stat.samples
+                tile_uuids = bucket["tile_uuids"]
+                if isinstance(tile_uuids, set):
+                    tile_uuids.add(tile_uuid)
+
+        ranked_rows: list[tuple[str, str, int, int, int]] = []
+        for area_id, bucket in area_totals.items():
+            minutes_spent = int(bucket["minutes_spent"])
+            samples = int(bucket["samples"])
+            tile_uuids = bucket["tile_uuids"]
+            tiles_count = len(tile_uuids) if isinstance(tile_uuids, set) else 0
+            if minutes_spent <= 0 and samples <= 0:
+                continue
+            area_name = str(bucket["area_name"])
+            ranked_rows.append((area_id, area_name, minutes_spent, samples, tiles_count))
+
+        ranked_rows.sort(key=lambda row: (-row[2], -row[3], row[1].lower()))
+        entries = [
+            TopAreaEntry(
+                rank=index + 1,
+                area_id=row[0],
+                area_name=row[1],
+                minutes_spent=row[2],
+                samples=row[3],
+                tiles_count=row[4],
+            )
+            for index, row in enumerate(ranked_rows[:safe_limit])
+        ]
+        response = TopAreasResponse(date=date, area_tile_uuid=area_tile_uuid, items=entries)
+
+        if self._cache_ttl_seconds > 0:
+            with self._cache_lock:
+                self._top_areas_cache[cache_key] = (monotonic(), response.model_copy(deep=True))
 
         return response
 

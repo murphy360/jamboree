@@ -9,6 +9,7 @@ from src.services.models import (
     LeaderboardResponse,
     MapFeature,
     MyMapsSyncResponse,
+    TopAreasResponse,
     TileLocation,
     TileDetailsResponse,
     TileHistoryResponse,
@@ -246,3 +247,18 @@ async def delete_tile(tile_uuid: str, request: Request) -> None:
 async def leaderboard(request: Request, date: str | None = Query(default=None)) -> LeaderboardResponse:
     leaderboard_store = request.app.state.leaderboard_store
     return leaderboard_store.get_leaderboard(date=date)
+
+
+@router.get("/areas/top", response_model=TopAreasResponse)
+async def top_areas(
+    request: Request,
+    date: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=200),
+    area_tile_uuid: str = Query(default="global"),
+) -> TopAreasResponse:
+    leaderboard_store = request.app.state.leaderboard_store
+    return leaderboard_store.get_top_areas(
+        date=date,
+        limit=limit,
+        area_tile_uuid=area_tile_uuid,
+    )
