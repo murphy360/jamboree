@@ -486,11 +486,20 @@ class AreaStore:
         result: list[CustomArea] = []
 
         for area in areas:
-            area_points = [
-                pt
-                for pt in history
-                if point_in_polygon(pt.latitude, pt.longitude, area.polygon)
-            ]
+            min_lat = min(point.latitude for point in area.polygon)
+            max_lat = max(point.latitude for point in area.polygon)
+            min_lon = min(point.longitude for point in area.polygon)
+            max_lon = max(point.longitude for point in area.polygon)
+
+            area_points: list[TileLocation] = []
+            for pt in history:
+                if pt.latitude < min_lat or pt.latitude > max_lat:
+                    continue
+                if pt.longitude < min_lon or pt.longitude > max_lon:
+                    continue
+                if point_in_polygon(pt.latitude, pt.longitude, area.polygon):
+                    area_points.append(pt)
+
             samples = len(area_points)
             seconds_spent = 0
             for idx in range(len(area_points) - 1):

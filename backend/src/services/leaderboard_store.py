@@ -37,6 +37,19 @@ class LeaderboardStore:
             return self._history_points_limit
         return 5000
 
+    def _downsample_history(self, history, max_points: int):
+        if max_points <= 0 or len(history) <= max_points:
+            return history
+
+        if max_points == 1:
+            return [history[-1]]
+
+        step = (len(history) - 1) / (max_points - 1)
+        sampled = [history[round(index * step)] for index in range(max_points)]
+        sampled[0] = history[0]
+        sampled[-1] = history[-1]
+        return sampled
+
     def invalidate_cache(self) -> None:
         with self._cache_lock:
             self._cache.clear()
@@ -140,6 +153,8 @@ class LeaderboardStore:
                 history = [p for p in history if p.observed_at.date().isoformat() == date]
             if not history:
                 continue
+
+            history = self._downsample_history(history, max_points=1200)
 
             stats = self._area_store.compute_area_stats(history, areas)
             for area_stat in stats:

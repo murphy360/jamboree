@@ -40,7 +40,7 @@ export function useTopAreas(backendUrl: string, date: string | null, limit = 20)
         params.set("date", date);
       }
 
-      const res = await fetchWithTimeout(`${backendUrl}/areas/top?${params.toString()}`, 12000);
+      const res = await fetchWithTimeout(`${backendUrl}/areas/top?${params.toString()}`, 30000);
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }
