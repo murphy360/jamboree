@@ -75,6 +75,10 @@ Optional flags:
 - `--pattern "*.bak"` to control which backup files are merged.
 - `--no-vacuum` to skip final `VACUUM`.
 
+This merge restores both:
+- `tile_history` rows
+- `custom_areas` rows (named polygons)
+
 Frontend detail-page history fetch size is controlled by:
 - `VITE_TILE_DETAILS_HISTORY_LIMIT` (default `3000`)
 
