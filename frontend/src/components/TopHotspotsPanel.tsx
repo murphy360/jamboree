@@ -221,7 +221,7 @@ export function TopHotspotsPanel({ backendUrl, locations, areas, onSelectHotspot
 
   return (
     <section className="leaderboard-panel">
-      <p className="tile-list-empty">Top hotspots ranked by total scout points across all scouts.</p>
+      <p className="tile-list-empty">Top hotspots outside named areas, ranked by total scout points across all scouts.</p>
       <table className="leaderboard-table">
         <thead>
           <tr>
