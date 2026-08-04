@@ -31,6 +31,12 @@ class LeaderboardStore:
         self._cache: dict[str, tuple[float, LeaderboardResponse]] = {}
         self._top_areas_cache: dict[str, tuple[float, TopAreasResponse]] = {}
 
+    def _effective_history_limit(self) -> int | None:
+        # Guardrail: avoid unbounded scans when env config sets 0 (unlimited).
+        if self._history_points_limit > 0:
+            return self._history_points_limit
+        return 5000
+
     def invalidate_cache(self) -> None:
         with self._cache_lock:
             self._cache.clear()
@@ -54,7 +60,7 @@ class LeaderboardStore:
         for tile_uuid, label in tile_ids:
             history = self._history_store.get_history(
                 tile_uuid,
-                limit=self._history_points_limit if self._history_points_limit > 0 else None,
+                limit=self._effective_history_limit(),
             )
             if date:
                 history = [p for p in history if p.observed_at.date().isoformat() == date]
@@ -128,7 +134,7 @@ class LeaderboardStore:
         for tile_uuid, _label in self._history_store.get_all_tile_identifiers():
             history = self._history_store.get_history(
                 tile_uuid,
-                limit=self._history_points_limit if self._history_points_limit > 0 else None,
+                limit=self._effective_history_limit(),
             )
             if date:
                 history = [p for p in history if p.observed_at.date().isoformat() == date]

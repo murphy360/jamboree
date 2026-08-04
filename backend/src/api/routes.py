@@ -257,8 +257,12 @@ async def top_areas(
     area_tile_uuid: str = Query(default="global"),
 ) -> TopAreasResponse:
     leaderboard_store = request.app.state.leaderboard_store
-    return leaderboard_store.get_top_areas(
-        date=date,
-        limit=limit,
-        area_tile_uuid=area_tile_uuid,
-    )
+    try:
+        return leaderboard_store.get_top_areas(
+            date=date,
+            limit=limit,
+            area_tile_uuid=area_tile_uuid,
+        )
+    except Exception:
+        # Keep UI functional if one malformed area record or heavy query path fails.
+        return TopAreasResponse(date=date, area_tile_uuid=area_tile_uuid, items=[])
