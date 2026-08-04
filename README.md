@@ -29,6 +29,8 @@ Set these values in `backend/.env`:
 - `TILE_HISTORY_MAX_POINTS_PER_TILE` (`0` by default for unlimited retention; set a positive value to cap stored points per tile)
 - `TILE_HISTORY_API_DEFAULT_LIMIT` (`0` by default; default `limit` applied to `GET /tiles/{tile_uuid}/history` when query param is omitted)
 - `TILE_DETAILS_API_DEFAULT_LIMIT` (`3000` by default; default `history_limit` applied to `GET /tiles/{tile_uuid}/details` when query param is omitted)
+- `TILE_LEADERBOARD_HISTORY_POINTS_LIMIT` (`5000` by default; per-tile point cap used by leaderboard computation to keep responses fast)
+- `TILE_LEADERBOARD_CACHE_TTL_SECONDS` (`20` by default; backend-maintained in-memory leaderboard cache lifetime)
 - `TILE_DWELL_MERGE_RADIUS_METERS` (`50` by default; merges nearby dwell hotspots into one cluster)
 - `MYMAPS_IMPORT_ENABLED` (`true` by default; enables Google My Maps KML sync)
 - `MYMAPS_KML_URL` (KML feed URL used for imports)

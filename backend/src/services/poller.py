@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from collections.abc import Callable
 from datetime import datetime
 from typing import Protocol
 
@@ -23,11 +24,13 @@ class TilePoller:
         ws_manager: WebSocketManager,
         history_store: TileHistoryStore,
         interval_seconds: int,
+        on_history_updated: Callable[[], None] | None = None,
     ) -> None:
         self.tile_client = tile_client
         self.ws_manager = ws_manager
         self.history_store = history_store
         self.interval_seconds = interval_seconds
+        self._on_history_updated = on_history_updated
         self._shutdown = asyncio.Event()
         self._poll_lock = asyncio.Lock()
         self._latest_cache: list[TileLocation] = []
@@ -84,6 +87,8 @@ class TilePoller:
                 print(f"[{now}] === POLLER: Recording {len(updates)} location updates")
                 await asyncio.to_thread(self.history_store.record, updates)
                 self._latest_cache = sorted(updates, key=lambda item: item.label)
+                if self._on_history_updated:
+                    self._on_history_updated()
 
             if self.ws_manager.has_connections():
                 # Prefer fresh poll results for live updates; fall back to storage when needed.

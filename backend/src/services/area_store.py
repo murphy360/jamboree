@@ -323,14 +323,15 @@ class AreaStore:
         return updated
 
     def get_areas(self, tile_uuid: str) -> list[CustomArea]:
-        _ = tile_uuid
         with self._lock:
             rows = self._connection.execute(
                 """
                 SELECT area_id, tile_uuid, name, polygon_json, created_at, updated_at, source_type, source_name, source_url, source_feature_id
                 FROM custom_areas
+                WHERE tile_uuid = ?
                 ORDER BY created_at ASC
-                """
+                """,
+                (tile_uuid,),
             ).fetchall()
 
         return [self._row_to_area(row) for row in rows]

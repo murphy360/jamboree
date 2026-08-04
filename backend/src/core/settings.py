@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     tile_history_max_points_per_tile: int = Field(default=0, ge=0, le=20000)
     tile_history_api_default_limit: int = Field(default=0, ge=0, le=50000)
     tile_details_api_default_limit: int = Field(default=3000, ge=0, le=50000)
+    tile_leaderboard_history_points_limit: int = Field(default=5000, ge=0, le=50000)
+    tile_leaderboard_cache_ttl_seconds: int = Field(default=20, ge=0, le=600)
     tile_dwell_merge_radius_meters: int = Field(default=50, ge=5, le=500)
     tile_area_hotspot_buffer_meters: int = Field(default=50, ge=0, le=500)
     backend_cors_origins: str = "*"

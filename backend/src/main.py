@@ -75,8 +75,16 @@ app.state.map_feature_store = MapFeatureStore(db_path=settings.tile_history_db_p
 app.state.leaderboard_store = LeaderboardStore(
     history_store=history_store,
     area_store=app.state.area_store,
+    history_points_limit=settings.tile_leaderboard_history_points_limit,
+    cache_ttl_seconds=settings.tile_leaderboard_cache_ttl_seconds,
 )
-poller = TilePoller(tile_client, ws_manager, history_store, settings.tile_poll_interval_seconds)
+poller = TilePoller(
+    tile_client,
+    ws_manager,
+    history_store,
+    settings.tile_poll_interval_seconds,
+    on_history_updated=app.state.leaderboard_store.invalidate_cache,
+)
 app.state.poller = poller
 mymaps_sync_service = MyMapsSyncService(
     area_store=app.state.area_store,
@@ -118,6 +126,7 @@ async def run_one_shot_tracker_reset() -> None:
 
         deleted_rows = await asyncio.to_thread(history_store.delete_all_history)
         poller.clear_cached_latest_locations()
+        app.state.leaderboard_store.invalidate_cache()
         marker_path.parent.mkdir(parents=True, exist_ok=True)
         marker_path.write_text(datetime.now(ONE_SHOT_RESET_TZ).isoformat(), encoding="utf-8")
         LOGGER.warning(

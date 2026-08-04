@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 
+async function fetchWithTimeout(input: string, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { signal: controller.signal });
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
 export interface LeaderboardEntry {
   rank: number;
   tile_uuid: string;
@@ -26,12 +36,16 @@ export function useLeaderboard(backendUrl: string, date: string | null) {
       const url = date
         ? `${backendUrl}/leaderboard?date=${date}`
         : `${backendUrl}/leaderboard`;
-      const res = await fetch(url);
+      const res = await fetchWithTimeout(url, 12000);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = (await res.json()) as LeaderboardData;
       setData(json);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("Request timed out");
+      } else {
+        setError(err instanceof Error ? err.message : "Unknown error");
+      }
     } finally {
       setLoading(false);
     }

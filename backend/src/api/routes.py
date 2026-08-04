@@ -155,6 +155,7 @@ async def create_area(
     tile_uuid: str, body: CreateAreaRequest, request: Request
 ) -> CustomArea:
     area_store = request.app.state.area_store
+    leaderboard_store = request.app.state.leaderboard_store
     settings = get_settings()
     if not body.merge_into_area_id and len(body.cluster_centers) < 3:
         raise HTTPException(
@@ -163,7 +164,7 @@ async def create_area(
         )
     try:
         if body.merge_into_area_id:
-            return area_store.merge_area(
+            merged = area_store.merge_area(
                 tile_uuid=tile_uuid,
                 merge_into_area_id=body.merge_into_area_id,
                 cluster_centers=body.cluster_centers,
@@ -171,7 +172,11 @@ async def create_area(
                 merge_source_area_ids=body.merge_source_area_ids,
                 hotspot_buffer_meters=settings.tile_area_hotspot_buffer_meters,
             )
-        return area_store.create_area(tile_uuid, body.name, body.cluster_centers)
+            leaderboard_store.invalidate_cache()
+            return merged
+        created = area_store.create_area(tile_uuid, body.name, body.cluster_centers)
+        leaderboard_store.invalidate_cache()
+        return created
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -185,10 +190,13 @@ async def map_features(request: Request, tile_uuid: str = Query(default="global"
 @router.post("/imports/mymaps/sync", response_model=MyMapsSyncResponse)
 async def sync_mymaps(request: Request) -> MyMapsSyncResponse:
     sync_service = request.app.state.mymaps_sync_service
+    leaderboard_store = request.app.state.leaderboard_store
     try:
         result = await sync_service.sync_once()
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"My Maps sync failed: {str(exc)[:280]}") from exc
+
+    leaderboard_store.invalidate_cache()
 
     return MyMapsSyncResponse(
         source_url=result.source_url,
@@ -204,28 +212,34 @@ async def rename_area(
     tile_uuid: str, area_id: str, body: UpdateAreaRequest, request: Request
 ) -> CustomArea:
     area_store = request.app.state.area_store
+    leaderboard_store = request.app.state.leaderboard_store
     updated = area_store.update_area(area_id, body.name)
     if not updated:
         raise HTTPException(status_code=404, detail="Area not found")
+    leaderboard_store.invalidate_cache()
     return updated
 
 
 @router.delete("/tiles/{tile_uuid}/areas/{area_id}", status_code=204)
 async def delete_area(tile_uuid: str, area_id: str, request: Request) -> None:
     area_store = request.app.state.area_store
+    leaderboard_store = request.app.state.leaderboard_store
     if not area_store.delete_area(area_id):
         raise HTTPException(status_code=404, detail="Area not found")
+    leaderboard_store.invalidate_cache()
 
 
 @router.delete("/tiles/{tile_uuid}", status_code=204)
 async def delete_tile(tile_uuid: str, request: Request) -> None:
     history_store = request.app.state.history_store
     area_store = request.app.state.area_store
+    leaderboard_store = request.app.state.leaderboard_store
 
     deleted_history_rows = history_store.delete_tile_history(tile_uuid)
     area_store.delete_areas_for_tile(tile_uuid)
     if deleted_history_rows == 0:
         raise HTTPException(status_code=404, detail="Tile history not found")
+    leaderboard_store.invalidate_cache()
 
 
 @router.get("/leaderboard", response_model=LeaderboardResponse)
