@@ -51,13 +51,23 @@ export type TileDetails = {
 };
 
 const DEFAULT_TILE_DETAILS_HISTORY_LIMIT = Number(
-  import.meta.env.VITE_TILE_DETAILS_HISTORY_LIMIT ?? "3000",
+  import.meta.env.VITE_TILE_DETAILS_HISTORY_LIMIT ?? "7000",
+);
+const DEFAULT_TILE_DETAILS_DEDUPE_TOLERANCE_METERS = Number(
+  import.meta.env.VITE_TILE_DETAILS_DEDUPE_TOLERANCE_METERS ?? "8",
 );
 
 function buildDetailsUrl(baseUrl: string, tileUuid: string): string {
   const url = new URL(`${baseUrl}/tiles/${encodeURIComponent(tileUuid)}/details`, window.location.origin);
   if (Number.isFinite(DEFAULT_TILE_DETAILS_HISTORY_LIMIT) && DEFAULT_TILE_DETAILS_HISTORY_LIMIT > 0) {
     url.searchParams.set("history_limit", String(DEFAULT_TILE_DETAILS_HISTORY_LIMIT));
+  }
+  url.searchParams.set("dedupe_consecutive", "true");
+  if (
+    Number.isFinite(DEFAULT_TILE_DETAILS_DEDUPE_TOLERANCE_METERS)
+    && DEFAULT_TILE_DETAILS_DEDUPE_TOLERANCE_METERS >= 0
+  ) {
+    url.searchParams.set("dedupe_tolerance_meters", String(DEFAULT_TILE_DETAILS_DEDUPE_TOLERANCE_METERS));
   }
   return url.toString();
 }

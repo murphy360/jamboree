@@ -96,7 +96,11 @@ This merge restores both:
 - `custom_areas` rows (named polygons)
 
 Frontend detail-page history fetch size is controlled by:
-- `VITE_TILE_DETAILS_HISTORY_LIMIT` (default `3000`)
+- `VITE_TILE_DETAILS_HISTORY_LIMIT` (default `7000`)
+
+Frontend dedupe of adjacent points (enabled by default) is controlled by:
+- `VITE_TILE_HISTORY_DEDUPE_TOLERANCE_METERS` (default `8`)
+- `VITE_TILE_DETAILS_DEDUPE_TOLERANCE_METERS` (default `8`)
 
 ### Tile History Time-Window Prune Tool
 
@@ -176,6 +180,18 @@ API endpoint:
 - `GET /areas/top?date=YYYY-MM-DD` for a single-day ranking.
 - Optional: `limit=<n>` (default `20`, max `200`).
 - Optional: `area_tile_uuid=<value>` (default `global`).
+
+History/detail endpoints also support optional adjacent-point deduplication to reduce repeated stationary points:
+
+- `dedupe_consecutive=true` to collapse consecutive points that are effectively the same.
+- `dedupe_tolerance_meters=<n>` to treat points within `<n>` meters as duplicates (default `0`).
+
+Examples:
+
+```bash
+curl "http://localhost:8086/tiles/<tile_uuid>/history?dedupe_consecutive=true&dedupe_tolerance_meters=8"
+curl "http://localhost:8086/tiles/<tile_uuid>/details?history_limit=7000&dedupe_consecutive=true&dedupe_tolerance_meters=8"
+```
 
 Examples:
 

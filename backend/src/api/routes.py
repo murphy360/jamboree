@@ -109,6 +109,8 @@ async def tile_history(
     tile_uuid: str,
     request: Request,
     limit: int | None = Query(default=None, ge=1, le=50000),
+    dedupe_consecutive: bool = Query(default=False),
+    dedupe_tolerance_meters: float = Query(default=0.0, ge=0, le=200),
 ) -> TileHistoryResponse:
     history_store = request.app.state.history_store
     settings = get_settings()
@@ -132,6 +134,9 @@ async def tile_history(
     if not history:
         raise HTTPException(status_code=404, detail="Tile history not found")
 
+    if dedupe_consecutive:
+        history = history_store.dedupe_consecutive_points(history, dedupe_tolerance_meters)
+
     return TileHistoryResponse(
         tile_uuid=tile_uuid,
         label=latest_label or history[-1].label,
@@ -148,6 +153,8 @@ async def tile_details(
     request: Request,
     dwell_merge_meters: float | None = Query(default=None, ge=5, le=500),
     history_limit: int | None = Query(default=None, ge=1, le=50000),
+    dedupe_consecutive: bool = Query(default=False),
+    dedupe_tolerance_meters: float = Query(default=0.0, ge=0, le=200),
 ) -> TileDetailsResponse:
     history_store = request.app.state.history_store
     area_store = request.app.state.area_store
@@ -172,6 +179,9 @@ async def tile_details(
         raise HTTPException(status_code=504, detail="Timed out loading tile details history")
     if not history:
         raise HTTPException(status_code=404, detail="Tile history not found")
+
+    if dedupe_consecutive:
+        history = history_store.dedupe_consecutive_points(history, dedupe_tolerance_meters)
 
     merge_radius_meters = dwell_merge_meters or settings.tile_dwell_merge_radius_meters
     try:

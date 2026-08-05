@@ -255,6 +255,79 @@ def test_record_keeps_only_first_and_last_stationary_breadcrumb(tmp_path) -> Non
     assert history[1].observed_at.isoformat() == "2026-05-19T15:10:00+00:00"
 
 
+def test_dedupe_consecutive_points_removes_adjacent_exact_duplicates(tmp_path) -> None:
+    history_store = build_history_store(tmp_path, "dedupe-exact.db")
+    history = [
+        TileLocation(
+            tile_uuid="device_tracker.tile_dedupe",
+            latitude=38.4,
+            longitude=-81.4,
+            observed_at=datetime(2026, 5, 19, 15, 0, tzinfo=UTC),
+            label="Tile Dedupe",
+        ),
+        TileLocation(
+            tile_uuid="device_tracker.tile_dedupe",
+            latitude=38.4,
+            longitude=-81.4,
+            observed_at=datetime(2026, 5, 19, 15, 1, tzinfo=UTC),
+            label="Tile Dedupe",
+        ),
+        TileLocation(
+            tile_uuid="device_tracker.tile_dedupe",
+            latitude=38.4,
+            longitude=-81.4,
+            observed_at=datetime(2026, 5, 19, 15, 2, tzinfo=UTC),
+            label="Tile Dedupe",
+        ),
+        TileLocation(
+            tile_uuid="device_tracker.tile_dedupe",
+            latitude=38.401,
+            longitude=-81.401,
+            observed_at=datetime(2026, 5, 19, 15, 3, tzinfo=UTC),
+            label="Tile Dedupe",
+        ),
+    ]
+
+    deduped = history_store.dedupe_consecutive_points(history, tolerance_meters=0)
+
+    assert len(deduped) == 2
+    assert deduped[0].observed_at.isoformat() == "2026-05-19T15:00:00+00:00"
+    assert deduped[1].observed_at.isoformat() == "2026-05-19T15:03:00+00:00"
+
+
+def test_dedupe_consecutive_points_uses_distance_tolerance(tmp_path) -> None:
+    history_store = build_history_store(tmp_path, "dedupe-distance.db")
+    history = [
+        TileLocation(
+            tile_uuid="device_tracker.tile_dedupe2",
+            latitude=38.400000,
+            longitude=-81.400000,
+            observed_at=datetime(2026, 5, 19, 16, 0, tzinfo=UTC),
+            label="Tile Dedupe2",
+        ),
+        TileLocation(
+            tile_uuid="device_tracker.tile_dedupe2",
+            latitude=38.400010,
+            longitude=-81.400010,
+            observed_at=datetime(2026, 5, 19, 16, 1, tzinfo=UTC),
+            label="Tile Dedupe2",
+        ),
+        TileLocation(
+            tile_uuid="device_tracker.tile_dedupe2",
+            latitude=38.401000,
+            longitude=-81.401000,
+            observed_at=datetime(2026, 5, 19, 16, 2, tzinfo=UTC),
+            label="Tile Dedupe2",
+        ),
+    ]
+
+    deduped = history_store.dedupe_consecutive_points(history, tolerance_meters=5)
+
+    assert len(deduped) == 2
+    assert deduped[0].observed_at.isoformat() == "2026-05-19T16:00:00+00:00"
+    assert deduped[1].observed_at.isoformat() == "2026-05-19T16:02:00+00:00"
+
+
 
 def test_delete_tile_endpoint_removes_history_and_custom_areas(tmp_path) -> None:
     original_history_store = getattr(app.state, "history_store", None)
@@ -447,6 +520,108 @@ def test_tile_history_endpoint_applies_limit_and_reports_truncation(tmp_path) ->
         assert payload["history_truncated"] is True
         assert payload["items"][0]["observed_at"] == "2026-05-22T10:03:00Z"
         assert payload["items"][1]["observed_at"] == "2026-05-22T10:04:00Z"
+    finally:
+        app.state.history_store = original_store
+
+
+def test_tile_history_endpoint_can_dedupe_adjacent_points(tmp_path) -> None:
+    original_store = getattr(app.state, "history_store", None)
+    history_store = build_history_store(tmp_path, "dedupe-endpoint-history.db")
+    history_store.record(
+        [
+            TileLocation(
+                tile_uuid="device_tracker.tile_limit",
+                latitude=38.0,
+                longitude=-81.0,
+                observed_at=datetime(2026, 5, 22, 10, 0, tzinfo=UTC),
+                label="Tile Limit",
+            ),
+            TileLocation(
+                tile_uuid="device_tracker.tile_limit",
+                latitude=38.0,
+                longitude=-81.0,
+                observed_at=datetime(2026, 5, 22, 10, 1, tzinfo=UTC),
+                label="Tile Limit",
+            ),
+            TileLocation(
+                tile_uuid="device_tracker.tile_limit",
+                latitude=38.0,
+                longitude=-81.0,
+                observed_at=datetime(2026, 5, 22, 10, 2, tzinfo=UTC),
+                label="Tile Limit",
+            ),
+            TileLocation(
+                tile_uuid="device_tracker.tile_limit",
+                latitude=38.1,
+                longitude=-81.1,
+                observed_at=datetime(2026, 5, 22, 10, 3, tzinfo=UTC),
+                label="Tile Limit",
+            ),
+        ]
+    )
+    app.state.history_store = history_store
+
+    try:
+        client = TestClient(app)
+        response = client.get(
+            "/tiles/device_tracker.tile_limit/history?dedupe_consecutive=true&dedupe_tolerance_meters=0"
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["total_points"] == 3
+        assert payload["returned_points"] == 2
+        assert payload["history_truncated"] is True
+        assert payload["items"][0]["observed_at"] == "2026-05-22T10:00:00Z"
+        assert payload["items"][1]["observed_at"] == "2026-05-22T10:03:00Z"
+    finally:
+        app.state.history_store = original_store
+
+
+def test_tile_details_endpoint_can_dedupe_adjacent_points(tmp_path) -> None:
+    original_store = getattr(app.state, "history_store", None)
+    history_store = build_history_store(tmp_path, "dedupe-endpoint-details.db")
+    history_store.record(
+        [
+            TileLocation(
+                tile_uuid="device_tracker.tile_limit_details",
+                latitude=38.2,
+                longitude=-81.2,
+                observed_at=datetime(2026, 5, 23, 9, 0, tzinfo=UTC),
+                label="Tile Limit Details",
+            ),
+            TileLocation(
+                tile_uuid="device_tracker.tile_limit_details",
+                latitude=38.2,
+                longitude=-81.2,
+                observed_at=datetime(2026, 5, 23, 9, 1, tzinfo=UTC),
+                label="Tile Limit Details",
+            ),
+            TileLocation(
+                tile_uuid="device_tracker.tile_limit_details",
+                latitude=38.3,
+                longitude=-81.3,
+                observed_at=datetime(2026, 5, 23, 9, 2, tzinfo=UTC),
+                label="Tile Limit Details",
+            ),
+        ]
+    )
+    app.state.history_store = history_store
+
+    try:
+        client = TestClient(app)
+        response = client.get(
+            "/tiles/device_tracker.tile_limit_details/details?dedupe_consecutive=true&dedupe_tolerance_meters=0"
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["total_points"] == 3
+        assert payload["returned_points"] == 2
+        assert payload["history_truncated"] is True
+        assert len(payload["items"]) == 2
+        assert payload["items"][0]["observed_at"] == "2026-05-23T09:00:00Z"
+        assert payload["items"][1]["observed_at"] == "2026-05-23T09:02:00Z"
     finally:
         app.state.history_store = original_store
 

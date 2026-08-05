@@ -5,6 +5,8 @@ interface ImportMetaEnv {
   readonly VITE_TILE_AGE_RED_MINUTES?: string;
   readonly VITE_TILE_HISTORY_LIMIT?: string;
   readonly VITE_TILE_DETAILS_HISTORY_LIMIT?: string;
+  readonly VITE_TILE_HISTORY_DEDUPE_TOLERANCE_METERS?: string;
+  readonly VITE_TILE_DETAILS_DEDUPE_TOLERANCE_METERS?: string;
 }
 
 interface ImportMeta {

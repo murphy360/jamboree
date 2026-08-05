@@ -240,6 +240,31 @@ class TileHistoryStore:
                 ).fetchall()
         return [TileLocation.model_validate(dict(row)) for row in rows]
 
+    def dedupe_consecutive_points(
+        self,
+        history: list[TileLocation],
+        tolerance_meters: float = 0.0,
+    ) -> list[TileLocation]:
+        if len(history) <= 1:
+            return history
+
+        effective_tolerance = max(tolerance_meters, 0.0)
+        deduped: list[TileLocation] = [history[0]]
+
+        for point in history[1:]:
+            previous = deduped[-1]
+            distance = _haversine_meters(
+                previous.latitude,
+                previous.longitude,
+                point.latitude,
+                point.longitude,
+            )
+            if distance <= effective_tolerance:
+                continue
+            deduped.append(point)
+
+        return deduped
+
     def get_history_summary(self, tile_uuid: str) -> tuple[int, str | None, str | None, str | None]:
         """Return total count, first observed_at, last observed_at, and latest label."""
         with self._lock:
