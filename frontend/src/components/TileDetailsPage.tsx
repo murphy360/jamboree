@@ -18,12 +18,6 @@ type TileDetailsPageProps = {
   showGisLayers: boolean;
 };
 
-type DailyBreakdownProps = {
-  details: TileDetails;
-  selectedDay: string;
-  onSelectDay: (day: string) => void;
-};
-
 type DetailsContentProps = {
   details: TileDetails;
   loading: boolean;
@@ -143,31 +137,6 @@ export function TileDetailsPage({ details, loading, onBack, onTrackerRemoved, ba
     />
   );
 }
-
-function DailyBreakdown({ details, selectedDay, onSelectDay }: DailyBreakdownProps) {
-  if (details.daily_breakdown.length === 0) {
-    return <p className="tile-list-empty">No daily activity yet.</p>;
-  }
-
-  return (
-    <ul className="tile-details-list">
-      {details.daily_breakdown.map((day) => (
-        <li key={day.date} className="tile-details-item">
-          <button
-            type="button"
-            className={selectedDay === day.date ? "tile-details-item-button is-active" : "tile-details-item-button"}
-            onClick={() => onSelectDay(day.date)}
-          >
-            <strong>{day.date}</strong>
-            <span>{day.point_count} points</span>
-            <span>{formatMinutes(day.total_span_minutes)} span</span>
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 
 function DetailsContent({ details, loading, onBack, onTrackerRemoved, baseUrl, tileUuid, onRefreshDetails, showGisLayers }: DetailsContentProps) {
   const [selectedHotspot, setSelectedHotspot] = useState<SelectedHotspot | null>(null);
@@ -356,14 +325,6 @@ function DetailsContent({ details, loading, onBack, onTrackerRemoved, baseUrl, t
     setSelectedHotspot(null);
   }, [details.last_observed_at]);
 
-  const handleBreakdownDayClick = useCallback((value: string) => {
-    setSelectedDay(value);
-    const dayRange = rangeForDay(value);
-    setRangeStart(dayRange.start);
-    setRangeEnd(dayRange.end);
-    setSelectedHotspot(null);
-  }, []);
-
   const handleRangeStartChange = useCallback((value: string) => {
     setRangeStart(value);
     setSelectedHotspot(null);
@@ -517,11 +478,6 @@ function DetailsContent({ details, loading, onBack, onTrackerRemoved, baseUrl, t
       />
 
       <div className="tile-details-grids">
-        <section>
-          <h3 className="tile-details-subtitle">Daily breakdown</h3>
-          <DailyBreakdown details={details} selectedDay={selectedDay} onSelectDay={handleBreakdownDayClick} />
-        </section>
-
         <section>
           <h3 className="tile-details-subtitle">Top dwell hotspots</h3>
           <DwellHotspotsPanel
