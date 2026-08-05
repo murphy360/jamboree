@@ -274,6 +274,7 @@ function TimelineVisitList({ sortedTimeline, selectedHotspot, selectMode, select
             <span>{formatDateTime(visit.startObservedAt)} to {formatDateTime(visit.endObservedAt)}</span>
             <span>{visit.locationLabel}</span>
             <span>{visit.latitude.toFixed(5)}, {visit.longitude.toFixed(5)}</span>
+            {visit.resolutionDebug ? <span>{visit.resolutionDebug}</span> : null}
           </button>
         </li>
       ))}

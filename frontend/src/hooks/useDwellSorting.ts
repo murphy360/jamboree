@@ -29,6 +29,7 @@ export type DwellTimelineDisplayRow = {
   minutesSpent: number;
   locationKind: DwellLocationKind;
   locationLabel: string;
+  resolutionDebug?: string;
 };
 
 export type SelectableLocationRow = {
@@ -208,18 +209,25 @@ function getVisitLocationDescriptor(
   visit: DwellVisitRow,
   areas: CustomArea[],
   points: TimedTilePoint[],
-): LocationDescriptor {
+): { descriptor: LocationDescriptor; resolutionDebug: string } {
   // Hard rule: if the visit center is inside an area, use that area label.
   const centerArea = findBestContainingArea(visit.latitude, visit.longitude, areas);
   if (centerArea) {
-    return areaToDescriptor(centerArea);
+    return {
+      descriptor: areaToDescriptor(centerArea),
+      resolutionDebug: `center-match area=${centerArea.name} (${centerArea.area_id})`,
+    };
   }
 
   const startMs = Date.parse(visit.startObservedAt);
   const endMs = Date.parse(visit.endObservedAt);
 
   if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
-    return getLocationDescriptor(visit.latitude, visit.longitude, visit.hotspotId, areas);
+    const descriptor = getLocationDescriptor(visit.latitude, visit.longitude, visit.hotspotId, areas);
+    return {
+      descriptor,
+      resolutionDebug: "fallback=invalid-visit-window",
+    };
   }
 
   const areaVotes = new Map<string, { area: CustomArea; count: number }>();
@@ -254,10 +262,24 @@ function getVisitLocationDescriptor(
         ? current
         : best;
     });
-    return areaToDescriptor(winner.area);
+
+    const voteSummary = [...areaVotes.values()]
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 4)
+      .map((entry) => `${entry.area.name}:${entry.count}`)
+      .join(", ");
+
+    return {
+      descriptor: areaToDescriptor(winner.area),
+      resolutionDebug: `vote-match winner=${winner.area.name} (${winner.count}); votes=[${voteSummary}]`,
+    };
   }
 
-  return getLocationDescriptor(visit.latitude, visit.longitude, visit.hotspotId, areas);
+  const descriptor = getLocationDescriptor(visit.latitude, visit.longitude, visit.hotspotId, areas);
+  return {
+    descriptor,
+    resolutionDebug: "fallback=no-area-votes",
+  };
 }
 
 function mergeConsecutiveAreaVisits(visits: TimelineDisplayRowWithArea[]): TimelineDisplayRowWithArea[] {
@@ -461,10 +483,14 @@ export function useDwellSorting(details: TileDetails, areaPolygons: AreaPolygonP
       }))
       .filter((item) => Number.isFinite(item.observedAtMs));
 
-    const timelineRows = dwellForTimeline.visits.map((visit) => ({
-      ...visit,
-      ...getVisitLocationDescriptor(visit, details.custom_areas, timedPoints),
-    }));
+    const timelineRows = dwellForTimeline.visits.map((visit) => {
+      const resolution = getVisitLocationDescriptor(visit, details.custom_areas, timedPoints);
+      return {
+        ...visit,
+        ...resolution.descriptor,
+        resolutionDebug: resolution.resolutionDebug,
+      };
+    });
 
     const transientVisitMaxMinutes = getTransientVisitMaxMinutes();
     const consecutiveMerged = mergeConsecutiveAreaVisits(timelineRows);
