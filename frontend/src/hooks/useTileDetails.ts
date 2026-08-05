@@ -53,14 +53,21 @@ export type TileDetails = {
 const DEFAULT_TILE_DETAILS_HISTORY_LIMIT = Number(
   import.meta.env.VITE_TILE_DETAILS_HISTORY_LIMIT ?? "7000",
 );
+const DEFAULT_TILE_DETAILS_INITIAL_BATCH = Number(
+  import.meta.env.VITE_TILE_DETAILS_INITIAL_BATCH ?? "1000",
+);
 const DEFAULT_TILE_DETAILS_DEDUPE_TOLERANCE_METERS = Number(
   import.meta.env.VITE_TILE_DETAILS_DEDUPE_TOLERANCE_METERS ?? "8",
 );
 
 function buildDetailsUrl(baseUrl: string, tileUuid: string): string {
+  return buildDetailsUrlWithLimit(baseUrl, tileUuid, DEFAULT_TILE_DETAILS_HISTORY_LIMIT);
+}
+
+function buildDetailsUrlWithLimit(baseUrl: string, tileUuid: string, historyLimit: number): string {
   const url = new URL(`${baseUrl}/tiles/${encodeURIComponent(tileUuid)}/details`, window.location.origin);
-  if (Number.isFinite(DEFAULT_TILE_DETAILS_HISTORY_LIMIT) && DEFAULT_TILE_DETAILS_HISTORY_LIMIT > 0) {
-    url.searchParams.set("history_limit", String(DEFAULT_TILE_DETAILS_HISTORY_LIMIT));
+  if (Number.isFinite(historyLimit) && historyLimit > 0) {
+    url.searchParams.set("history_limit", String(historyLimit));
   }
   url.searchParams.set("dedupe_consecutive", "true");
   if (
@@ -111,17 +118,45 @@ export function useTileDetails(
     const loadDetails = async () => {
       setLoading(true);
       try {
-        const response = await fetch(
-          buildDetailsUrl(normalizedBaseUrl, tileUuid),
-        );
+        const targetLimit = Number.isFinite(DEFAULT_TILE_DETAILS_HISTORY_LIMIT) && DEFAULT_TILE_DETAILS_HISTORY_LIMIT > 0
+          ? DEFAULT_TILE_DETAILS_HISTORY_LIMIT
+          : 3000;
+        const initialLimit = Number.isFinite(DEFAULT_TILE_DETAILS_INITIAL_BATCH) && DEFAULT_TILE_DETAILS_INITIAL_BATCH > 0
+          ? Math.min(DEFAULT_TILE_DETAILS_INITIAL_BATCH, targetLimit)
+          : Math.min(1000, targetLimit);
+        const maxLimit = 50_000;
+        const step = Math.max(500, initialLimit);
+        let requestedLimit = initialLimit;
 
-        if (!response.ok) {
-          throw new Error(`Details request failed with ${response.status}`);
-        }
+        while (!cancelled) {
+          const response = await fetch(
+            buildDetailsUrlWithLimit(normalizedBaseUrl, tileUuid, requestedLimit),
+          );
 
-        const payload = (await response.json()) as TileDetails;
-        if (!cancelled) {
-          setDetails(payload);
+          if (!response.ok) {
+            throw new Error(`Details request failed with ${response.status}`);
+          }
+
+          const payload = (await response.json()) as TileDetails;
+          if (!cancelled) {
+            setDetails(payload);
+          }
+
+          if (!payload.history_truncated || payload.returned_points >= payload.total_points) {
+            break;
+          }
+
+          const nextLimit = Math.min(
+            maxLimit,
+            targetLimit,
+            Math.max(requestedLimit + step, payload.returned_points + 1),
+            payload.total_points,
+          );
+          if (nextLimit <= requestedLimit) {
+            break;
+          }
+
+          requestedLimit = nextLimit;
         }
       } catch {
         // Keep seeded/current details visible if full history loading fails.

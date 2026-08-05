@@ -476,7 +476,10 @@ function DetailsContent({ details, loading, onBack, onTrackerRemoved, baseUrl, t
       {details.history_truncated ? (
         <p className="tile-history-meta">
           Loaded {details.returned_points.toLocaleString()} of {details.total_points.toLocaleString()} points
-          to keep the page responsive. Increase VITE_TILE_DETAILS_HISTORY_LIMIT to load more.
+          {loading
+            ? " so far. Loading additional historical points in the background."
+            : " for this view."
+          }
         </p>
       ) : null}
 
