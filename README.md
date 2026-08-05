@@ -39,6 +39,7 @@ Set these values in `backend/.env`:
 - `MYMAPS_KML_URL` (KML feed URL used for imports)
 - `MYMAPS_IMPORT_TILE_UUID` (`global` by default)
 - `MYMAPS_IMPORT_INTERVAL_SECONDS` (`900` by default; sync interval in seconds)
+- `MYMAPS_POLYGON_EXCLUDE_PREFIXES` (comma-separated name prefixes skipped during polygon import; for example `feature,AP-,BC-OAA-`)
 - `MYMAPS_POLYGON_MERGE_RULES` (`BARR:Barrels,BOWS:Bows` by default; applied automatically after each My Maps sync)
 
 Tile details endpoint supports runtime override for hotspot merge distance:
@@ -60,6 +61,7 @@ Google My Maps import behavior:
 - Runs automatically on backend startup.
 - Re-runs periodically based on `MYMAPS_IMPORT_INTERVAL_SECONDS`.
 - Replaces previously imported non-manual geometries while keeping manual areas intact.
+- Skips polygon imports whose names start with any prefix listed in `MYMAPS_POLYGON_EXCLUDE_PREFIXES`.
 - Automatically merges configured prefix groups into canonical polygons after each sync (default: `BARR* -> Barrels`, `BOWS* -> Bows`).
 
 Proxy reliability note:
