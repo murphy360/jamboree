@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 from src.services.leaderboard_store import LeaderboardStore
 from src.services.models import TileLocation
@@ -37,6 +38,27 @@ class _DummyAreaStore:
     def get_areas(self, tile_uuid: str):
         _ = tile_uuid
         return []
+
+    def compute_area_stats(self, history, areas):
+        _ = history
+        _ = areas
+        return []
+
+
+class _GlobalPatchAreaStore:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def get_areas(self, tile_uuid: str):
+        self.calls.append(tile_uuid)
+        if tile_uuid != "global":
+            return []
+        return [SimpleNamespace(name="patch trading Piggot")]
+
+    def compute_area_stats(self, history, areas):
+        _ = history
+        _ = areas
+        return [SimpleNamespace(minutes_spent=25)]
 
 
 def _leaderboard_store() -> LeaderboardStore:
@@ -93,3 +115,20 @@ def test_leaderboard_cache_invalidation_forces_recompute() -> None:
     store.get_leaderboard()
 
     assert history_store.get_history_calls == 2
+
+
+def test_patch_trading_leaderboard_uses_global_areas() -> None:
+    history_store = _DummyHistoryStore()
+    area_store = _GlobalPatchAreaStore()
+    store = LeaderboardStore(
+        history_store=history_store,
+        area_store=area_store,
+        cache_ttl_seconds=0,
+    )
+
+    response = store.get_leaderboard()
+
+    assert area_store.calls == ["global"]
+    assert len(response.patch_trading_time) == 1
+    assert response.patch_trading_time[0].tile_uuid == "device_tracker.tile_1"
+    assert response.patch_trading_time[0].value == 25.0

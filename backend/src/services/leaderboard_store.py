@@ -69,6 +69,13 @@ class LeaderboardStore:
         distance_results: list[tuple[str, str, float]] = []
         camp_time_results: list[tuple[str, str, int]] = []
         patch_time_results: list[tuple[str, str, int]] = []
+        global_areas = self._area_store.get_areas("global")
+        matching_global_camp_areas = [
+            area for area in global_areas if self._is_camp_area(area.name.lower())
+        ]
+        matching_global_patch_areas = [
+            area for area in global_areas if self._is_patch_trading_area(area.name.lower())
+        ]
 
         for tile_uuid, label in tile_ids:
             history = self._history_store.get_history(
@@ -83,20 +90,17 @@ class LeaderboardStore:
                 if distance_m > 0:
                     distance_results.append((tile_uuid, label, distance_m))
 
-            areas = self._area_store.get_areas(tile_uuid)
-            if not history or not areas:
+            if not history:
                 continue
 
-            matching_camp_areas = [a for a in areas if self._is_camp_area(a.name.lower())]
-            if matching_camp_areas:
-                stats = self._area_store.compute_area_stats(history, matching_camp_areas)
+            if matching_global_camp_areas:
+                stats = self._area_store.compute_area_stats(history, matching_global_camp_areas)
                 total_minutes = sum(a.minutes_spent for a in stats)
                 if total_minutes > 0:
                     camp_time_results.append((tile_uuid, label, total_minutes))
 
-            matching_patch_areas = [a for a in areas if self._is_patch_trading_area(a.name.lower())]
-            if matching_patch_areas:
-                stats = self._area_store.compute_area_stats(history, matching_patch_areas)
+            if matching_global_patch_areas:
+                stats = self._area_store.compute_area_stats(history, matching_global_patch_areas)
                 total_minutes = sum(a.minutes_spent for a in stats)
                 if total_minutes > 0:
                     patch_time_results.append((tile_uuid, label, total_minutes))
