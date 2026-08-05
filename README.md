@@ -30,7 +30,7 @@ Set these values in `backend/.env`:
 - `TILE_HISTORY_MERGE_PATTERN` (`*.bak` by default; glob used to discover backup DB files)
 - `TILE_HISTORY_MERGE_ARCHIVE_DIR` (`merged` by default; merged backup files are moved here after merge)
 - `TILE_HISTORY_MAX_POINTS_PER_TILE` (`0` by default for unlimited retention; set a positive value to cap stored points per tile)
-- `TILE_HISTORY_API_DEFAULT_LIMIT` (`0` by default; default `limit` applied to `GET /tiles/{tile_uuid}/history` when query param is omitted)
+- `TILE_HISTORY_API_DEFAULT_LIMIT` (`3000` by default; default `limit` applied to `GET /tiles/{tile_uuid}/history` when query param is omitted)
 - `TILE_DETAILS_API_DEFAULT_LIMIT` (`3000` by default; default `history_limit` applied to `GET /tiles/{tile_uuid}/details` when query param is omitted)
 - `TILE_LEADERBOARD_HISTORY_POINTS_LIMIT` (`5000` by default; per-tile point cap used by leaderboard computation to keep responses fast)
 - `TILE_LEADERBOARD_CACHE_TTL_SECONDS` (`20` by default; backend-maintained in-memory leaderboard cache lifetime)

@@ -7,6 +7,16 @@ type TileHistoryResponse = {
   items: TileLocation[];
 };
 
+const DEFAULT_TILE_HISTORY_LIMIT = Number(import.meta.env.VITE_TILE_HISTORY_LIMIT ?? "3000");
+
+function buildHistoryUrl(baseUrl: string, tileUuid: string): string {
+  const url = new URL(`${baseUrl}/tiles/${encodeURIComponent(tileUuid)}/history`, window.location.origin);
+  if (Number.isFinite(DEFAULT_TILE_HISTORY_LIMIT) && DEFAULT_TILE_HISTORY_LIMIT > 0) {
+    url.searchParams.set("limit", String(DEFAULT_TILE_HISTORY_LIMIT));
+  }
+  return url.toString();
+}
+
 export function useTileHistory(baseUrl: string, tileUuid: string | null) {
   const [history, setHistory] = useState<TileLocation[]>([]);
   const [loading, setLoading] = useState(false);
@@ -26,7 +36,7 @@ export function useTileHistory(baseUrl: string, tileUuid: string | null) {
       setLoading(true);
       try {
         const response = await fetch(
-          `${normalizedBaseUrl}/tiles/${encodeURIComponent(tileUuid)}/history`,
+          buildHistoryUrl(normalizedBaseUrl, tileUuid),
         );
 
         if (!response.ok) {
