@@ -172,7 +172,7 @@ export function useTileDetails(
     return () => {
       cancelled = true;
     };
-  }, [normalizedBaseUrl, tileUuid, refreshKey, initialLocation]);
+  }, [normalizedBaseUrl, tileUuid, refreshKey]);
 
   return { details, loading };
 }
