@@ -302,7 +302,12 @@ class AreaStore:
             self._connection.execute(
                 """
                 UPDATE custom_areas
-                SET polygon_json = ?, updated_at = ?
+                SET polygon_json = ?,
+                    updated_at = ?,
+                    source_type = 'manual',
+                    source_name = NULL,
+                    source_url = NULL,
+                    source_feature_id = NULL
                 WHERE area_id = ?
                 """,
                 (polygon_json, now, merge_into_area_id),

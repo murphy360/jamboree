@@ -166,6 +166,56 @@ def test_merge_area_updates_target_and_removes_sources(tmp_path):
     assert remaining[0].area_id == target.area_id
 
 
+def test_merge_area_promotes_imported_target_to_manual(tmp_path):
+    store = make_store(tmp_path)
+    target = store.create_area(
+        "global",
+        "Imported Target",
+        [
+            AreaPolygonPoint(latitude=38.070, longitude=-81.070),
+            AreaPolygonPoint(latitude=38.071, longitude=-81.070),
+            AreaPolygonPoint(latitude=38.0705, longitude=-81.069),
+        ],
+        source_type="mymaps_kml_polygon",
+        source_name="Tents_NSJ26",
+        source_url="https://example.test/kml",
+        source_feature_id="abc:1",
+    )
+    source = store.create_area(
+        "global",
+        "Imported Source",
+        [
+            AreaPolygonPoint(latitude=38.080, longitude=-81.080),
+            AreaPolygonPoint(latitude=38.081, longitude=-81.080),
+            AreaPolygonPoint(latitude=38.0805, longitude=-81.079),
+        ],
+        source_type="mymaps_kml_polygon",
+        source_name="Tents_NSJ26",
+        source_url="https://example.test/kml",
+        source_feature_id="abc:2",
+    )
+
+    merged = store.merge_area(
+        tile_uuid="global",
+        merge_into_area_id=target.area_id,
+        cluster_centers=[],
+        merge_source_area_ids=[source.area_id],
+    )
+
+    assert merged.source_type == "manual"
+    assert merged.source_name is None
+    assert merged.source_url is None
+    assert merged.source_feature_id is None
+
+    # My Maps sync deletes only non-manual rows. A user-merged area must persist.
+    deleted = store.delete_non_manual_areas("global")
+    assert deleted == 0
+
+    remaining = store.get_areas("global")
+    assert len(remaining) == 1
+    assert remaining[0].area_id == target.area_id
+
+
 def test_merge_area_rejects_missing_target(tmp_path):
     store = make_store(tmp_path)
 
