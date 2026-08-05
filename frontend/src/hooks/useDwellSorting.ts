@@ -209,6 +209,12 @@ function getVisitLocationDescriptor(
   areas: CustomArea[],
   points: TimedTilePoint[],
 ): LocationDescriptor {
+  // Hard rule: if the visit center is inside an area, use that area label.
+  const centerArea = findBestContainingArea(visit.latitude, visit.longitude, areas);
+  if (centerArea) {
+    return areaToDescriptor(centerArea);
+  }
+
   const startMs = Date.parse(visit.startObservedAt);
   const endMs = Date.parse(visit.endObservedAt);
 
