@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CustomArea } from "../hooks/useTileDetails";
 
 type CustomAreasPanelProps = {
@@ -149,6 +149,18 @@ export function CustomAreasPanel({
     () => sortedAreas.filter((area) => selectedIds.has(area.area_id)),
     [sortedAreas, selectedIds],
   );
+
+  useEffect(() => {
+    const validIds = new Set(areas.map((area) => area.area_id));
+    const nextSelectedIds = new Set(Array.from(selectedIds).filter((areaId) => validIds.has(areaId)));
+
+    if (nextSelectedIds.size === selectedIds.size) {
+      return;
+    }
+
+    setSelectedIds(nextSelectedIds);
+    onFocusAreas?.(Array.from(nextSelectedIds));
+  }, [areas, onFocusAreas, selectedIds]);
 
   const toggleSelected = (areaId: string) => {
     setSelectedIds((current) => {
