@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { analyzeDwellHotspots, type DwellTimeFilter, type DwellViewMode } from "../utils/dwellAnalytics";
+import { analyzeDwellHotspots, type DwellTimeFilter, type DwellViewMode, type DwellVisitRow } from "../utils/dwellAnalytics";
 import type { TileDetails, AreaPolygonPoint, CustomArea } from "./useTileDetails";
 
 type OverallSort = "minutes" | "visits" | "samples";
@@ -51,6 +51,11 @@ type LocationDescriptor = {
 };
 
 type TimelineDisplayRowWithArea = DwellTimelineDisplayRow & { areaId?: string };
+type TimedTilePoint = {
+  latitude: number;
+  longitude: number;
+  observedAtMs: number;
+};
 
 const DEFAULT_TRANSIENT_VISIT_MAX_MINUTES = 8;
 const DEFAULT_AREA_LABEL_PRIORITY = "subcamp:300,camp:220,village:180,headquarters:120,hq:110,patch:40,piggot:30";
@@ -98,6 +103,31 @@ function areaPriorityScore(area: CustomArea): number {
     }
   });
   return best;
+}
+
+function findBestContainingArea(lat: number, lon: number, areas: CustomArea[]): CustomArea | null {
+  const containingAreas = areas.filter((candidate) => pointInPolygon(lat, lon, candidate.polygon));
+  if (containingAreas.length === 0) {
+    return null;
+  }
+
+  return containingAreas.reduce((best, current) => {
+    const bestPriority = areaPriorityScore(best);
+    const currentPriority = areaPriorityScore(current);
+    if (currentPriority !== bestPriority) {
+      return currentPriority > bestPriority ? current : best;
+    }
+    return polygonAreaScore(current.polygon) > polygonAreaScore(best.polygon) ? current : best;
+  });
+}
+
+function areaToDescriptor(area: CustomArea): LocationDescriptor {
+  return {
+    entryId: `area:${area.area_id}`,
+    locationKind: "area",
+    locationLabel: area.name,
+    areaId: area.area_id,
+  };
 }
 
 function pointInPolygon(lat: number, lon: number, polygon: AreaPolygonPoint[]): boolean {
@@ -162,25 +192,9 @@ function polygonAreaScore(polygon: AreaPolygonPoint[]): number {
 }
 
 function getLocationDescriptor(lat: number, lon: number, hotspotId: number, areas: CustomArea[]): LocationDescriptor {
-  const containingAreas = areas.filter((candidate) => pointInPolygon(lat, lon, candidate.polygon));
-  const area = containingAreas.length > 0
-    ? containingAreas.reduce((best, current) => {
-      const bestPriority = areaPriorityScore(best);
-      const currentPriority = areaPriorityScore(current);
-      if (currentPriority !== bestPriority) {
-        return currentPriority > bestPriority ? current : best;
-      }
-      return polygonAreaScore(current.polygon) > polygonAreaScore(best.polygon) ? current : best;
-    })
-    : null;
-
+  const area = findBestContainingArea(lat, lon, areas);
   if (area) {
-    return {
-      entryId: `area:${area.area_id}`,
-      locationKind: "area",
-      locationLabel: area.name,
-      areaId: area.area_id,
-    };
+    return areaToDescriptor(area);
   }
 
   return {
@@ -188,6 +202,56 @@ function getLocationDescriptor(lat: number, lon: number, hotspotId: number, area
     locationKind: "hotspot",
     locationLabel: `Hotspot #${hotspotId + 1}`,
   };
+}
+
+function getVisitLocationDescriptor(
+  visit: DwellVisitRow,
+  areas: CustomArea[],
+  points: TimedTilePoint[],
+): LocationDescriptor {
+  const startMs = Date.parse(visit.startObservedAt);
+  const endMs = Date.parse(visit.endObservedAt);
+
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
+    return getLocationDescriptor(visit.latitude, visit.longitude, visit.hotspotId, areas);
+  }
+
+  const areaVotes = new Map<string, { area: CustomArea; count: number }>();
+
+  points.forEach((point) => {
+    if (point.observedAtMs < startMs || point.observedAtMs > endMs) {
+      return;
+    }
+    const match = findBestContainingArea(point.latitude, point.longitude, areas);
+    if (!match) {
+      return;
+    }
+    const existing = areaVotes.get(match.area_id);
+    if (!existing) {
+      areaVotes.set(match.area_id, { area: match, count: 1 });
+      return;
+    }
+    existing.count += 1;
+  });
+
+  if (areaVotes.size > 0) {
+    const winner = [...areaVotes.values()].reduce((best, current) => {
+      if (current.count !== best.count) {
+        return current.count > best.count ? current : best;
+      }
+      const bestPriority = areaPriorityScore(best.area);
+      const currentPriority = areaPriorityScore(current.area);
+      if (currentPriority !== bestPriority) {
+        return currentPriority > bestPriority ? current : best;
+      }
+      return polygonAreaScore(current.area.polygon) > polygonAreaScore(best.area.polygon)
+        ? current
+        : best;
+    });
+    return areaToDescriptor(winner.area);
+  }
+
+  return getLocationDescriptor(visit.latitude, visit.longitude, visit.hotspotId, areas);
 }
 
 function mergeConsecutiveAreaVisits(visits: TimelineDisplayRowWithArea[]): TimelineDisplayRowWithArea[] {
@@ -383,9 +447,17 @@ export function useDwellSorting(details: TileDetails, areaPolygons: AreaPolygonP
   }, [allOverall, details.custom_areas]);
 
   const sortedTimeline = useMemo(() => {
+    const timedPoints: TimedTilePoint[] = details.items
+      .map((item) => ({
+        latitude: item.latitude,
+        longitude: item.longitude,
+        observedAtMs: Date.parse(item.observed_at),
+      }))
+      .filter((item) => Number.isFinite(item.observedAtMs));
+
     const timelineRows = dwellForTimeline.visits.map((visit) => ({
       ...visit,
-      ...getLocationDescriptor(visit.latitude, visit.longitude, visit.hotspotId, details.custom_areas),
+      ...getVisitLocationDescriptor(visit, details.custom_areas, timedPoints),
     }));
 
     const transientVisitMaxMinutes = getTransientVisitMaxMinutes();
