@@ -52,6 +52,16 @@ type LocationDescriptor = {
 
 type TimelineDisplayRowWithArea = DwellTimelineDisplayRow & { areaId?: string };
 
+const DEFAULT_TRANSIENT_VISIT_MAX_MINUTES = 8;
+
+function getTransientVisitMaxMinutes(): number {
+  const configured = Number(import.meta.env.VITE_DWELL_TRANSIENT_VISIT_MAX_MINUTES ?? "");
+  if (!Number.isFinite(configured) || configured < 0) {
+    return DEFAULT_TRANSIENT_VISIT_MAX_MINUTES;
+  }
+  return configured;
+}
+
 function pointInPolygon(lat: number, lon: number, polygon: AreaPolygonPoint[]): boolean {
   const n = polygon.length;
   if (n < 3) return false;
@@ -145,6 +155,69 @@ function mergeConsecutiveAreaVisits(visits: TimelineDisplayRowWithArea[]): Timel
   });
 
   return merged;
+}
+
+function mergeVisitRows(
+  first: TimelineDisplayRowWithArea,
+  second: TimelineDisplayRowWithArea,
+): TimelineDisplayRowWithArea {
+  const combinedSamples = first.samples + second.samples;
+  return {
+    ...first,
+    endObservedAt: second.endObservedAt,
+    minutesSpent: first.minutesSpent + second.minutesSpent,
+    samples: combinedSamples,
+    latitude: (first.latitude * first.samples + second.latitude * second.samples) / combinedSamples,
+    longitude: (first.longitude * first.samples + second.longitude * second.samples) / combinedSamples,
+  };
+}
+
+function suppressTransientAreaTransitions(
+  visits: TimelineDisplayRowWithArea[],
+  transientVisitMaxMinutes: number,
+): TimelineDisplayRowWithArea[] {
+  if (visits.length < 3 || transientVisitMaxMinutes <= 0) {
+    return visits;
+  }
+
+  const smoothed = visits.map((visit) => ({ ...visit }));
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+
+    for (let index = 0; index <= smoothed.length - 3; index += 1) {
+      const first = smoothed[index];
+      const middle = smoothed[index + 1];
+      const last = smoothed[index + 2];
+
+      const hasMatchingAreaBounds =
+        first.locationKind === "area" &&
+        last.locationKind === "area" &&
+        Boolean(first.areaId) &&
+        first.areaId === last.areaId;
+
+      if (!hasMatchingAreaBounds) {
+        continue;
+      }
+
+      if (middle.locationKind === "area" && middle.areaId === first.areaId) {
+        continue;
+      }
+
+      if (middle.minutesSpent > transientVisitMaxMinutes) {
+        continue;
+      }
+
+      const mergedFirstLast = mergeVisitRows(first, middle);
+      const mergedAll = mergeVisitRows(mergedFirstLast, last);
+      smoothed.splice(index, 3, mergedAll);
+      changed = true;
+      break;
+    }
+  }
+
+  return smoothed;
 }
 
 export function useDwellSorting(details: TileDetails, areaPolygons: AreaPolygonPoint[][]) {
@@ -250,7 +323,9 @@ export function useDwellSorting(details: TileDetails, areaPolygons: AreaPolygonP
       ...getLocationDescriptor(visit.latitude, visit.longitude, visit.hotspotId, details.custom_areas),
     }));
 
-    const items = mergeConsecutiveAreaVisits(timelineRows);
+    const transientVisitMaxMinutes = getTransientVisitMaxMinutes();
+    const consecutiveMerged = mergeConsecutiveAreaVisits(timelineRows);
+    const items = suppressTransientAreaTransitions(consecutiveMerged, transientVisitMaxMinutes);
 
     if (timelineSort === "oldest") {
       items.sort(

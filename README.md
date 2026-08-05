@@ -106,6 +106,9 @@ Frontend dedupe of adjacent points (enabled by default) is controlled by:
 - `VITE_TILE_HISTORY_DEDUPE_TOLERANCE_METERS` (default `8`)
 - `VITE_TILE_DETAILS_DEDUPE_TOLERANCE_METERS` (default `8`)
 
+Frontend timeline suppression of brief area flicker (`A -> B -> A`) is controlled by:
+- `VITE_DWELL_TRANSIENT_VISIT_MAX_MINUTES` (default `8`)
+
 Frontend incremental loading starts with the newest points first, then expands backward. Initial batch sizes are controlled by:
 - `VITE_TILE_HISTORY_INITIAL_BATCH` (default `1000`)
 - `VITE_TILE_DETAILS_INITIAL_BATCH` (default `1000`)
