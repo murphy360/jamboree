@@ -95,6 +95,31 @@ def test_update_area_renames_it(tmp_path):
     assert areas[0].name == "New Name"
 
 
+def test_update_area_polygon_replaces_vertices(tmp_path):
+    store = make_store(tmp_path)
+    area = store.create_area(
+        "tile_uuid_1",
+        "Editable Area",
+        [(38.07, -81.07), (38.08, -81.07), (38.075, -81.06)],
+    )
+
+    updated = store.update_area_polygon(
+        area.area_id,
+        [
+            AreaPolygonPoint(latitude=38.071, longitude=-81.071),
+            AreaPolygonPoint(latitude=38.081, longitude=-81.071),
+            AreaPolygonPoint(latitude=38.076, longitude=-81.061),
+        ],
+    )
+
+    assert updated is not None
+    assert len(updated.polygon) == 3
+    assert updated.source_type == "manual"
+
+    areas = store.get_areas("tile_uuid_1")
+    assert areas[0].polygon[0].latitude == 38.071
+
+
 def test_delete_area_removes_it(tmp_path):
     store = make_store(tmp_path)
     centers = [(38.07, -81.07), (38.08, -81.07), (38.075, -81.06)]

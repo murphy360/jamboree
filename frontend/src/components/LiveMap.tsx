@@ -4,6 +4,7 @@ import { Circle, CircleMarker, FeatureGroup, MapContainer, TileLayer, Tooltip, u
 import { Breadcrumbs } from "./Breadcrumbs";
 import { AreaPolygons } from "./AreaPolygons";
 import { ArcGISLayers } from "./ArcGISLayers";
+import { AreaPolygonEditorOverlay } from "./AreaPolygonEditorOverlay";
 import { TileMarkers } from "./TileMarkers";
 import type { TileLocation } from "../hooks/useTileLocations";
 import type { AreaPolygonPoint, CustomArea } from "../hooks/useTileDetails";
@@ -21,6 +22,9 @@ type LiveMapProps = {
   breadcrumbs?: TileLocation[];
   breadcrumbColor?: string;
   tileColorByUuid?: Record<string, string>;
+  editableArea?: CustomArea | null;
+  editablePolygon?: { latitude: number; longitude: number }[] | null;
+  onEditablePolygonChange?: (polygon: { latitude: number; longitude: number }[]) => void;
   fitSignal?: number;
   showGisLayers?: boolean;
   importedPoints?: ImportedMapPoint[];
@@ -300,6 +304,9 @@ export function LiveMap({
   onFocusedHotspotHandled,
   focusedAreas = [],
   areaFocusSignal = 0,
+  editableArea = null,
+  editablePolygon = null,
+  onEditablePolygonChange,
 }: LiveMapProps) {
   const selected = findSelectedTile(locations, selectedTileUuid);
   const selectedMarkerColor = getSelectedMarkerColor(selected, tileColorByUuid);
@@ -330,6 +337,13 @@ export function LiveMap({
         />
         {showGisLayers ? <ArcGISLayers showNSJRegions={true} showSummitLakes={true} /> : null}
         <AreaPolygons areas={areas ?? []} visibleLabels={visibleAreaLabels} onToggleLabel={toggleAreaLabel} />
+        {editableArea && editablePolygon && onEditablePolygonChange ? (
+          <AreaPolygonEditorOverlay
+            area={editableArea}
+            polygon={editablePolygon}
+            onChange={onEditablePolygonChange}
+          />
+        ) : null}
         <BreadcrumbOverlay breadcrumbs={breadcrumbs} color={breadcrumbColor} />
         <ImportedPointsOverlay points={importedPoints} />
         {focusedHotspot ? (

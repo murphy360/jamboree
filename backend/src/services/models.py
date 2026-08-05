@@ -148,6 +148,10 @@ class UpdateAreaRequest(BaseModel):
     name: str
 
 
+class UpdateAreaPolygonRequest(BaseModel):
+    polygon: list[AreaPolygonPoint]
+
+
 class TileDetailsResponse(BaseModel):
     tile_uuid: str
     label: str

@@ -108,6 +108,35 @@ function findContainingArea(tile: TileLocation, areas: CustomArea[]): CustomArea
   return areas.find((area) => pointInPolygon(tile.latitude, tile.longitude, area.polygon)) ?? null;
 }
 
+function getAreaCentroid(area: CustomArea): { latitude: number; longitude: number } {
+  const totals = area.polygon.reduce(
+    (accumulator, point) => ({
+      latitude: accumulator.latitude + point.latitude,
+      longitude: accumulator.longitude + point.longitude,
+    }),
+    { latitude: 0, longitude: 0 },
+  );
+
+  const count = Math.max(area.polygon.length, 1);
+  return {
+    latitude: totals.latitude / count,
+    longitude: totals.longitude / count,
+  };
+}
+
+function getDistanceMeters(
+  latitudeA: number,
+  longitudeA: number,
+  latitudeB: number,
+  longitudeB: number,
+): number {
+  const metersPerLatitude = 111_320;
+  const metersPerLongitude = Math.cos(((latitudeA + latitudeB) / 2) * (Math.PI / 180)) * 111_320;
+  const deltaLatitude = (latitudeB - latitudeA) * metersPerLatitude;
+  const deltaLongitude = (longitudeB - longitudeA) * metersPerLongitude;
+  return Math.sqrt(deltaLatitude ** 2 + deltaLongitude ** 2);
+}
+
 function TrackedTileList({
   entries,
   selectedTileUuid,
@@ -328,6 +357,8 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
   const [focusSignal, setFocusSignal] = useState(0);
   const [focusedAreaIds, setFocusedAreaIds] = useState<string[]>([]);
   const [areaFocusSignal, setAreaFocusSignal] = useState(0);
+  const [editingAreaId, setEditingAreaId] = useState<string | null>(null);
+  const [draftAreaPolygon, setDraftAreaPolygon] = useState<AreaPolygonPoint[] | null>(null);
   const currentTimeMs = Date.now();
 
   const toggleAreaCollapse = (areaId: string) => {
@@ -337,7 +368,17 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
     }));
   };
 
-  const { areas, createArea, renameArea, deleteArea, deleteAreas, mergeAreas, latestMergeUndo, undoMerge } = useCustomAreas({
+  const {
+    areas,
+    createArea,
+    renameArea,
+    updateAreaPolygon,
+    deleteArea,
+    deleteAreas,
+    mergeAreas,
+    latestMergeUndo,
+    undoMerge,
+  } = useCustomAreas({
     baseUrl: backendUrl,
     tileUuid: "global", // Placeholder UUID to fetch global areas
     onRefresh: () => {},
@@ -416,6 +457,82 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
     setFocusSignal((value) => value + 1);
   }, []);
 
+  const nearbyAreas = useMemo(() => {
+    if (!focusedHotspot) {
+      return [];
+    }
+
+    return areas
+      .map((area) => {
+        const centroid = getAreaCentroid(area);
+        return {
+          area,
+          distanceMeters: getDistanceMeters(
+            focusedHotspot.latitude,
+            focusedHotspot.longitude,
+            centroid.latitude,
+            centroid.longitude,
+          ),
+        };
+      })
+      .sort((left, right) => left.distanceMeters - right.distanceMeters)
+      .slice(0, 5);
+  }, [areas, focusedHotspot]);
+
+  const editingArea = useMemo(
+    () => areas.find((area) => area.area_id === editingAreaId) ?? null,
+    [areas, editingAreaId],
+  );
+
+  const startAreaEdit = useCallback(
+    (areaId: string) => {
+      const area = areas.find((candidate) => candidate.area_id === areaId);
+      if (!area) {
+        return;
+      }
+
+      setEditingAreaId(area.area_id);
+      setDraftAreaPolygon(area.polygon.map((point) => ({ latitude: point.latitude, longitude: point.longitude })));
+    },
+    [areas],
+  );
+
+  const cancelAreaEdit = useCallback(() => {
+    setEditingAreaId(null);
+    setDraftAreaPolygon(null);
+  }, []);
+
+  const handleSaveAreaEdit = useCallback(async () => {
+    if (!editingArea || !draftAreaPolygon) {
+      return;
+    }
+
+    const confirmMessage = [
+      `Save the updated polygon for "${editingArea.name}"?`,
+      focusedHotspot ? `Hotspot anchor: ${focusedHotspot.label}.` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      await updateAreaPolygon(editingArea.area_id, draftAreaPolygon);
+      cancelAreaEdit();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save area polygon.";
+      window.alert(message);
+    }
+  }, [cancelAreaEdit, draftAreaPolygon, editingArea, focusedHotspot, updateAreaPolygon]);
+
+  const handleCancelAreaEdit = useCallback(() => {
+    if (window.confirm("Discard the current polygon edits?")) {
+      cancelAreaEdit();
+    }
+  }, [cancelAreaEdit]);
+
   const handleFocusedHotspotHandled = useCallback(() => {}, []);
 
   const focusedAreas = useMemo(
@@ -435,6 +552,9 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
       <LiveMap
         locations={locations}
         areas={areas}
+        editableArea={editingArea}
+        editablePolygon={draftAreaPolygon}
+        onEditablePolygonChange={setDraftAreaPolygon}
         selectedTileUuid={null}
         onTileClick={() => {}}
         onMapClick={() => {}}
@@ -537,12 +657,41 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
       )}
 
       {tileListMode === "hotspots" && (
-        <TopHotspotsPanel
-          backendUrl={backendUrl}
-          locations={locations}
-          areas={areas}
-          onSelectHotspot={handleSelectTopHotspot}
-        />
+        <section className="tile-details-panel">
+          <TopHotspotsPanel
+            backendUrl={backendUrl}
+            locations={locations}
+            areas={areas}
+            selectedHotspot={focusedHotspot}
+            onSelectHotspot={handleSelectTopHotspot}
+            onEditArea={startAreaEdit}
+            editingAreaId={editingAreaId}
+          />
+          {focusedHotspot ? (
+            <p className="tile-history-meta">
+              Choose a nearby area to edit around the selected hotspot, then drag the vertices on the map.
+            </p>
+          ) : null}
+          {editingArea ? (
+            <section className="hotspot-area-edit-card">
+              <h3>Edit Area</h3>
+              <p>
+                Adjust the vertices for <strong>{editingArea.name}</strong> around the selected hotspot, then save.
+              </p>
+              <p className="tile-history-meta">
+                {draftAreaPolygon ? `${draftAreaPolygon.length} vertices` : "No polygon loaded"}
+              </p>
+              <div className="tile-area-selection-actions">
+                <button type="button" className="tile-area-btn" onClick={() => void handleSaveAreaEdit()} disabled={!draftAreaPolygon}>
+                  Save polygon
+                </button>
+                <button type="button" className="tile-area-btn tile-area-btn-delete" onClick={handleCancelAreaEdit}>
+                  Cancel
+                </button>
+              </div>
+            </section>
+          ) : null}
+        </section>
       )}
 
       {tileListMode === "top-areas" && (

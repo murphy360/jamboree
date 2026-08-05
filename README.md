@@ -211,6 +211,7 @@ docker compose exec frontend npm run lint
 - React map UI with live WebSocket updates implemented.
 - ArcGIS layers integrated into the frontend map.
 - Tile details page includes history, dwell clusters, and custom area management.
+- Top Hotspots can now seed a nearby area polygon edit flow with draggable vertices and a save confirmation.
 - Tile details page includes a Remove tracker action that clears local history and custom areas for that tracker.
 - Leaderboard UI supports Daily and Overall rankings for distance and time-in-camp.
 - Top Areas tab supports Daily and Overall historical area dwell rankings.

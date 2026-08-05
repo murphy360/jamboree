@@ -2,11 +2,21 @@ import { useEffect, useMemo, useState } from "react";
 import type { TileLocation } from "../hooks/useTileLocations";
 import type { CustomArea, TileDwellCluster } from "../hooks/useTileDetails";
 
+type SelectedHotspot = {
+  latitude: number;
+  longitude: number;
+  label: string;
+  radiusMeters: number;
+} | null;
+
 type TopHotspotsPanelProps = {
   backendUrl: string;
   locations: TileLocation[];
   areas: CustomArea[];
+  selectedHotspot?: SelectedHotspot;
   onSelectHotspot: (hotspot: { latitude: number; longitude: number; label: string; radiusMeters: number }) => void;
+  onEditArea: (areaId: string) => void;
+  editingAreaId: string | null;
 };
 
 type TileDetailsPayload = {
@@ -89,7 +99,43 @@ function formatMinutes(value: number): string {
   return minutes === 0 ? `${hours} hr` : `${hours} hr ${minutes} min`;
 }
 
-export function TopHotspotsPanel({ backendUrl, locations, areas, onSelectHotspot }: TopHotspotsPanelProps) {
+function getAreaCentroid(area: CustomArea): { latitude: number; longitude: number } {
+  const totals = area.polygon.reduce(
+    (accumulator, point) => ({
+      latitude: accumulator.latitude + point.latitude,
+      longitude: accumulator.longitude + point.longitude,
+    }),
+    { latitude: 0, longitude: 0 },
+  );
+  const count = Math.max(area.polygon.length, 1);
+  return {
+    latitude: totals.latitude / count,
+    longitude: totals.longitude / count,
+  };
+}
+
+function getDistanceMeters(
+  latitudeA: number,
+  longitudeA: number,
+  latitudeB: number,
+  longitudeB: number,
+): number {
+  const metersPerLatitude = 111_320;
+  const metersPerLongitude = Math.cos(((latitudeA + latitudeB) / 2) * (Math.PI / 180)) * 111_320;
+  const deltaLatitude = (latitudeB - latitudeA) * metersPerLatitude;
+  const deltaLongitude = (longitudeB - longitudeA) * metersPerLongitude;
+  return Math.sqrt(deltaLatitude ** 2 + deltaLongitude ** 2);
+}
+
+export function TopHotspotsPanel({
+  backendUrl,
+  locations,
+  areas,
+  selectedHotspot,
+  onSelectHotspot,
+  onEditArea,
+  editingAreaId,
+}: TopHotspotsPanelProps) {
   const [rows, setRows] = useState<HotspotRow[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -116,6 +162,28 @@ export function TopHotspotsPanel({ backendUrl, locations, areas, onSelectHotspot
       );
     return normalized.join("|");
   }, [areas]);
+
+  const nearbyAreas = useMemo(() => {
+    if (!selectedHotspot) {
+      return [];
+    }
+
+    return areas
+      .map((area) => {
+        const centroid = getAreaCentroid(area);
+        return {
+          area,
+          distanceMeters: getDistanceMeters(
+            selectedHotspot.latitude,
+            selectedHotspot.longitude,
+            centroid.latitude,
+            centroid.longitude,
+          ),
+        };
+      })
+      .sort((left, right) => left.distanceMeters - right.distanceMeters)
+      .slice(0, 5);
+  }, [areas, selectedHotspot]);
 
   useEffect(() => {
     if (!normalizedBaseUrl || tileIds.length === 0) {
@@ -222,6 +290,40 @@ export function TopHotspotsPanel({ backendUrl, locations, areas, onSelectHotspot
   return (
     <section className="leaderboard-panel">
       <p className="tile-list-empty">Top hotspots outside named areas, ranked by total scout points across all scouts.</p>
+      {selectedHotspot ? (
+        <div className="hotspot-area-edit-card">
+          <h3>{selectedHotspot.label}</h3>
+          <p>
+            {selectedHotspot.latitude.toFixed(5)}, {selectedHotspot.longitude.toFixed(5)}
+          </p>
+          <p className="tile-history-meta">Select a nearby area to edit its polygon around this hotspot.</p>
+          {nearbyAreas.length > 0 ? (
+            <ul className="tile-details-list">
+              {nearbyAreas.map(({ area, distanceMeters }) => (
+                <li key={area.area_id} className="tile-area-row">
+                  <div className="tile-area-row-content">
+                    <div className="tile-area-row-info">
+                      <strong>{area.name}</strong>
+                      <span>{Math.round(distanceMeters)} m away</span>
+                    </div>
+                    <div className="tile-area-row-actions">
+                      <button
+                        type="button"
+                        className={editingAreaId === area.area_id ? "tile-area-btn is-active" : "tile-area-btn"}
+                        onClick={() => onEditArea(area.area_id)}
+                      >
+                        {editingAreaId === area.area_id ? "Editing" : "Edit polygon"}
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="tile-list-empty">No nearby areas found.</p>
+          )}
+        </div>
+      ) : null}
       <table className="leaderboard-table">
         <thead>
           <tr>

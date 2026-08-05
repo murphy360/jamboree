@@ -15,6 +15,7 @@ from src.services.models import (
     TileDetailsResponse,
     TileHistoryResponse,
     UpdateAreaRequest,
+    UpdateAreaPolygonRequest,
 )
 
 router = APIRouter()
@@ -336,6 +337,24 @@ async def rename_area(
     updated = area_store.update_area(area_id, body.name)
     if not updated:
         raise HTTPException(status_code=404, detail="Area not found")
+    leaderboard_store.invalidate_cache()
+    return updated
+
+
+@router.patch("/tiles/{tile_uuid}/areas/{area_id}/polygon", response_model=CustomArea)
+async def update_area_polygon(
+    tile_uuid: str, area_id: str, body: UpdateAreaPolygonRequest, request: Request
+) -> CustomArea:
+    area_store = request.app.state.area_store
+    leaderboard_store = request.app.state.leaderboard_store
+    try:
+        updated = area_store.update_area_polygon(area_id, body.polygon)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    if not updated:
+        raise HTTPException(status_code=404, detail="Area not found")
+
     leaderboard_store.invalidate_cache()
     return updated
 

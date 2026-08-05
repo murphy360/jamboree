@@ -477,6 +477,46 @@ class AreaStore:
 
         return self._row_to_area(row) if row else None
 
+    def update_area_polygon(self, area_id: str, polygon: list[AreaPolygonPoint]) -> CustomArea | None:
+        if len(polygon) < 3:
+            raise ValueError("At least 3 points are required to update an area polygon.")
+
+        cleaned_polygon = list(polygon)
+        first_point = cleaned_polygon[0]
+        last_point = cleaned_polygon[-1]
+        if first_point.latitude == last_point.latitude and first_point.longitude == last_point.longitude:
+            cleaned_polygon = cleaned_polygon[:-1]
+
+        polygon_json = json.dumps(
+            [{"latitude": point.latitude, "longitude": point.longitude} for point in cleaned_polygon]
+        )
+        now = datetime.now(UTC).isoformat()
+
+        with self._lock:
+            self._connection.execute(
+                """
+                UPDATE custom_areas
+                SET polygon_json = ?,
+                    updated_at = ?,
+                    source_type = 'manual',
+                    source_name = NULL,
+                    source_url = NULL,
+                    source_feature_id = NULL
+                WHERE area_id = ?
+                """,
+                (polygon_json, now, area_id),
+            )
+            self._connection.commit()
+            row = self._connection.execute(
+                """
+                SELECT area_id, tile_uuid, name, polygon_json, created_at, updated_at, source_type, source_name, source_url, source_feature_id
+                FROM custom_areas WHERE area_id = ?
+                """,
+                (area_id,),
+            ).fetchone()
+
+        return self._row_to_area(row) if row else None
+
     def delete_area(self, area_id: str) -> bool:
         with self._lock:
             cursor = self._connection.execute(

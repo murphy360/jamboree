@@ -121,6 +121,33 @@ export function useCustomAreas({ baseUrl, tileUuid, onRefresh }: UseCustomAreasO
     [normalizedBaseUrl, tileUuid, onRefresh, fetchAreas, fetchLatestMergeUndo],
   );
 
+  const updateAreaPolygon = useCallback(
+    async (areaId: string, polygon: AreaPolygonPoint[]): Promise<void> => {
+      if (!tileUuid || !normalizedBaseUrl) {
+        return;
+      }
+
+      const response = await fetch(
+        `${normalizedBaseUrl}/tiles/${encodeURIComponent(tileUuid)}/areas/${encodeURIComponent(areaId)}/polygon`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ polygon }),
+        },
+      );
+
+      if (!response.ok) {
+        const detail = (await response.json().catch(() => ({}))) as { detail?: string };
+        throw new Error(detail.detail ?? `Area polygon update failed (${response.status})`);
+      }
+
+      await fetchAreas();
+      await fetchLatestMergeUndo();
+      onRefresh();
+    },
+    [normalizedBaseUrl, tileUuid, onRefresh, fetchAreas, fetchLatestMergeUndo],
+  );
+
   const deleteArea = useCallback(
     async (areaId: string): Promise<void> => {
       if (!tileUuid || !normalizedBaseUrl) {
@@ -222,5 +249,15 @@ export function useCustomAreas({ baseUrl, tileUuid, onRefresh }: UseCustomAreasO
     [normalizedBaseUrl, tileUuid, onRefresh, fetchAreas, fetchLatestMergeUndo],
   );
 
-  return { areas, createArea, renameArea, deleteArea, deleteAreas, mergeAreas, latestMergeUndo, undoMerge };
+  return {
+    areas,
+    createArea,
+    renameArea,
+    updateAreaPolygon,
+    deleteArea,
+    deleteAreas,
+    mergeAreas,
+    latestMergeUndo,
+    undoMerge,
+  };
 }
