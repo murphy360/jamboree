@@ -107,8 +107,29 @@ function pointInPolygon(lat: number, lon: number, polygon: AreaPolygonPoint[]): 
   return inside;
 }
 
+function polygonAreaScore(polygon: AreaPolygonPoint[]): number {
+  if (polygon.length < 3) {
+    return 0;
+  }
+
+  let areaTwice = 0;
+  for (let index = 0; index < polygon.length; index += 1) {
+    const nextIndex = (index + 1) % polygon.length;
+    const current = polygon[index];
+    const next = polygon[nextIndex];
+    areaTwice += current.longitude * next.latitude - next.longitude * current.latitude;
+  }
+
+  return Math.abs(areaTwice) / 2;
+}
+
 function getLocationDescriptor(lat: number, lon: number, hotspotId: number, areas: CustomArea[]): LocationDescriptor {
-  const area = areas.find((candidate) => pointInPolygon(lat, lon, candidate.polygon));
+  const containingAreas = areas.filter((candidate) => pointInPolygon(lat, lon, candidate.polygon));
+  const area = containingAreas.length > 0
+    ? containingAreas.reduce((best, current) =>
+      polygonAreaScore(current.polygon) > polygonAreaScore(best.polygon) ? current : best)
+    : null;
+
   if (area) {
     return {
       entryId: `area:${area.area_id}`,
