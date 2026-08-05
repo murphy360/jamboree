@@ -328,6 +328,14 @@ function DetailsContent({ details, loading, onBack, onTrackerRemoved, baseUrl, t
     };
   }, [details, filteredDwellClusters, filteredItems, normalizedRange.endMs, normalizedRange.startMs, selectedDay, selectedDaySummary]);
 
+  const hotspotDetails = useMemo(
+    () => ({
+      ...filteredDetails,
+      custom_areas: mapOverlayAreas,
+    }),
+    [filteredDetails, mapOverlayAreas],
+  );
+
   const selectedPointCount = filteredItems.length;
 
   const handleDayChange = useCallback((value: string) => {
@@ -517,7 +525,7 @@ function DetailsContent({ details, loading, onBack, onTrackerRemoved, baseUrl, t
         <section>
           <h3 className="tile-details-subtitle">Top dwell hotspots</h3>
           <DwellHotspotsPanel
-            details={filteredDetails}
+            details={hotspotDetails}
             selectedHotspot={selectedHotspot}
             onSelectHotspot={setSelectedHotspot}
             onCreateArea={handleCreateArea}
