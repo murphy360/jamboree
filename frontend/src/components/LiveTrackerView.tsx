@@ -359,6 +359,7 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
   const [areaFocusSignal, setAreaFocusSignal] = useState(0);
   const [editingAreaId, setEditingAreaId] = useState<string | null>(null);
   const [draftAreaPolygon, setDraftAreaPolygon] = useState<AreaPolygonPoint[] | null>(null);
+  const [hotspotMapEditUnlocked, setHotspotMapEditUnlocked] = useState(false);
   const currentTimeMs = Date.now();
 
   const toggleAreaCollapse = (areaId: string) => {
@@ -455,29 +456,8 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
   const handleSelectTopHotspot = useCallback((hotspot: FocusedHotspot) => {
     setFocusedHotspot(hotspot);
     setFocusSignal((value) => value + 1);
+    setHotspotMapEditUnlocked(false);
   }, []);
-
-  const nearbyAreas = useMemo(() => {
-    if (!focusedHotspot) {
-      return [];
-    }
-
-    return areas
-      .map((area) => {
-        const centroid = getAreaCentroid(area);
-        return {
-          area,
-          distanceMeters: getDistanceMeters(
-            focusedHotspot.latitude,
-            focusedHotspot.longitude,
-            centroid.latitude,
-            centroid.longitude,
-          ),
-        };
-      })
-      .sort((left, right) => left.distanceMeters - right.distanceMeters)
-      .slice(0, 5);
-  }, [areas, focusedHotspot]);
 
   const editingArea = useMemo(
     () => areas.find((area) => area.area_id === editingAreaId) ?? null,
@@ -533,6 +513,13 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
     }
   }, [cancelAreaEdit]);
 
+  const handleMapAreaClick = useCallback((areaId: string) => {
+    if (tileListMode !== "hotspots" || !hotspotMapEditUnlocked) {
+      return;
+    }
+    startAreaEdit(areaId);
+  }, [hotspotMapEditUnlocked, startAreaEdit, tileListMode]);
+
   const handleFocusedHotspotHandled = useCallback(() => {}, []);
 
   const focusedAreas = useMemo(
@@ -552,6 +539,8 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
       <LiveMap
         locations={locations}
         areas={areas}
+        onAreaClick={handleMapAreaClick}
+        selectedAreaId={editingAreaId}
         editableArea={editingArea}
         editablePolygon={draftAreaPolygon}
         onEditablePolygonChange={setDraftAreaPolygon}
@@ -662,15 +651,26 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
             backendUrl={backendUrl}
             locations={locations}
             areas={areas}
-            selectedHotspot={focusedHotspot}
             onSelectHotspot={handleSelectTopHotspot}
-            onEditArea={startAreaEdit}
-            editingAreaId={editingAreaId}
           />
           {focusedHotspot ? (
-            <p className="tile-history-meta">
-              Choose a nearby area to edit around the selected hotspot, then drag the vertices on the map.
-            </p>
+            <>
+              <div className="tile-area-selection-actions">
+                <button
+                  type="button"
+                  className={hotspotMapEditUnlocked ? "tile-area-btn is-active" : "tile-area-btn"}
+                  onClick={() => setHotspotMapEditUnlocked((value) => !value)}
+                >
+                  {hotspotMapEditUnlocked ? "Lock area selection" : "Unlock area selection on map"}
+                </button>
+              </div>
+              <p className="tile-history-meta">
+                {hotspotMapEditUnlocked
+                  ? "Click an area polygon on the map to start editing it around the selected hotspot."
+                  : "Select a hotspot row, then unlock map area selection to edit a polygon directly from the map."
+                }
+              </p>
+            </>
           ) : null}
           {editingArea ? (
             <section className="hotspot-area-edit-card">

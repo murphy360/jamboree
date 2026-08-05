@@ -8,9 +8,17 @@ type AreaPolygonsProps = {
   areas: CustomArea[];
   visibleLabels: Record<string, boolean>;
   onToggleLabel: (areaId: string) => void;
+  onAreaClick?: (areaId: string) => void;
+  selectedAreaId?: string | null;
 };
 
-export function AreaPolygons({ areas, visibleLabels, onToggleLabel }: AreaPolygonsProps) {
+export function AreaPolygons({
+  areas,
+  visibleLabels,
+  onToggleLabel,
+  onAreaClick,
+  selectedAreaId = null,
+}: AreaPolygonsProps) {
   return (
     <>
       {areas.map((area) => {
@@ -26,8 +34,12 @@ export function AreaPolygons({ areas, visibleLabels, onToggleLabel }: AreaPolygo
 
         const handleClick = (event: { originalEvent?: MouseEvent }) => {
           event.originalEvent?.stopPropagation();
+          onAreaClick?.(area.area_id);
           onToggleLabel(area.area_id);
         };
+
+        const areaStyle = getAreaPolygonStyle(area.name);
+        const isSelected = selectedAreaId === area.area_id;
 
         return (
           <Fragment key={area.area_id}>
@@ -35,7 +47,7 @@ export function AreaPolygons({ areas, visibleLabels, onToggleLabel }: AreaPolygo
               positions={positions}
               interactive={true}
               bubblingMouseEvents={false}
-              pathOptions={getAreaPolygonStyle(area.name)}
+              pathOptions={isSelected ? { ...areaStyle, weight: 4, opacity: 1, fillOpacity: 0.24 } : areaStyle}
               eventHandlers={{ click: handleClick }}
             />
             {isLabelVisible ? <Marker position={center} icon={labelIcon} interactive={false} /> : null}

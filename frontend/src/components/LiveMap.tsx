@@ -15,6 +15,8 @@ import "leaflet-draw/dist/leaflet.draw.css";
 type LiveMapProps = {
   locations: TileLocation[];
   areas?: CustomArea[];
+  onAreaClick?: (areaId: string) => void;
+  selectedAreaId?: string | null;
   selectedTileUuid: string | null;
   onTileClick: (tile: TileLocation) => void;
   onMapClick: () => void;
@@ -289,6 +291,8 @@ const PolygonDrawControl = memo(function PolygonDrawControl({ onDrawPolygon }: P
 export function LiveMap({
   locations,
   areas,
+  onAreaClick,
+  selectedAreaId = null,
   selectedTileUuid,
   onTileClick,
   onMapClick,
@@ -336,7 +340,13 @@ export function LiveMap({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         {showGisLayers ? <ArcGISLayers showNSJRegions={true} showSummitLakes={true} /> : null}
-        <AreaPolygons areas={areas ?? []} visibleLabels={visibleAreaLabels} onToggleLabel={toggleAreaLabel} />
+        <AreaPolygons
+          areas={areas ?? []}
+          visibleLabels={visibleAreaLabels}
+          onToggleLabel={toggleAreaLabel}
+          onAreaClick={onAreaClick}
+          selectedAreaId={selectedAreaId}
+        />
         {editableArea && editablePolygon && onEditablePolygonChange ? (
           <AreaPolygonEditorOverlay
             area={editableArea}
