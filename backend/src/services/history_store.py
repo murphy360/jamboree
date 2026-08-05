@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
 from collections import defaultdict
+from datetime import UTC, datetime
 from math import asin, cos, radians, sin, sqrt
 from pathlib import Path
 from threading import Lock
 
 from src.services.area_store import point_in_polygon
 from src.services.models import CustomArea, TileDailySummary, TileDwellCluster, TileLocation
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _haversine_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -20,9 +25,25 @@ def _haversine_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> flo
 
 
 class TileHistoryStore:
-    def __init__(self, db_path: str = "/app/data/tile_history.db", max_points_per_tile: int = 100) -> None:
+    def __init__(
+        self,
+        db_path: str = "/app/data/tile_history.db",
+        max_points_per_tile: int = 100,
+        outlier_filter_enabled: bool = False,
+        outlier_max_speed_mps: float = 45.0,
+        outlier_min_speed_check_seconds: int = 10,
+        outlier_max_jump_meters: float = 1200.0,
+        outlier_max_future_seconds: int = 180,
+        outlier_max_staleness_seconds: int = 0,
+    ) -> None:
         self._db_path = Path(db_path)
         self._max_points_per_tile = max_points_per_tile
+        self._outlier_filter_enabled = outlier_filter_enabled
+        self._outlier_max_speed_mps = max(0.0, outlier_max_speed_mps)
+        self._outlier_min_speed_check_seconds = max(1, outlier_min_speed_check_seconds)
+        self._outlier_max_jump_meters = max(0.0, outlier_max_jump_meters)
+        self._outlier_max_future_seconds = max(0, outlier_max_future_seconds)
+        self._outlier_max_staleness_seconds = max(0, outlier_max_staleness_seconds)
         self._lock = Lock()
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._connection = sqlite3.connect(self._db_path, check_same_thread=False)
@@ -98,6 +119,16 @@ class TileHistoryStore:
         touched_tiles: set[str] = set()
 
         for location in locations:
+            rejected_reason = self._outlier_rejection_reason(location)
+            if rejected_reason:
+                LOGGER.info(
+                    "Dropping outlier point for %s (%s): %s",
+                    location.tile_uuid,
+                    location.label,
+                    rejected_reason,
+                )
+                continue
+
             touched_tiles.add(location.tile_uuid)
             observed_at_second = location.observed_at.replace(microsecond=0).isoformat()
 
@@ -187,6 +218,80 @@ class TileHistoryStore:
 
         if touched_tiles:
             self._connection.commit()
+
+    def _reference_observed_at(self, location: TileLocation) -> datetime:
+        return location.tile_service_observed_at or location.observed_at
+
+    def _latest_location_for_tile(self, tile_uuid: str) -> TileLocation | None:
+        row = self._connection.execute(
+            """
+            SELECT tile_uuid, latitude, longitude, observed_at, label, tile_service_observed_at, polled_at
+            FROM tile_history
+            WHERE tile_uuid = ?
+            ORDER BY COALESCE(polled_at, observed_at) DESC, observed_at DESC, rowid DESC
+            LIMIT 1
+            """,
+            (tile_uuid,),
+        ).fetchone()
+        if not row:
+            return None
+        return TileLocation.model_validate(dict(row))
+
+    def _outlier_rejection_reason(self, location: TileLocation) -> str | None:
+        if not self._outlier_filter_enabled:
+            return None
+
+        now = location.polled_at or datetime.now(UTC)
+        observed = self._reference_observed_at(location)
+
+        if self._outlier_max_future_seconds > 0:
+            future_seconds = (observed - now).total_seconds()
+            if future_seconds > self._outlier_max_future_seconds:
+                return (
+                    f"future timestamp {future_seconds:.1f}s exceeds "
+                    f"limit {self._outlier_max_future_seconds}s"
+                )
+
+        if self._outlier_max_staleness_seconds > 0:
+            staleness_seconds = (now - observed).total_seconds()
+            if staleness_seconds > self._outlier_max_staleness_seconds:
+                return (
+                    f"stale timestamp {staleness_seconds:.1f}s exceeds "
+                    f"limit {self._outlier_max_staleness_seconds}s"
+                )
+
+        previous = self._latest_location_for_tile(location.tile_uuid)
+        if not previous:
+            return None
+
+        previous_observed = self._reference_observed_at(previous)
+        delta_seconds = (observed - previous_observed).total_seconds()
+        distance_meters = _haversine_meters(
+            previous.latitude,
+            previous.longitude,
+            location.latitude,
+            location.longitude,
+        )
+
+        if self._outlier_max_jump_meters > 0 and distance_meters > self._outlier_max_jump_meters:
+            if 0 < delta_seconds < self._outlier_min_speed_check_seconds:
+                return (
+                    f"short-window jump {distance_meters:.1f}m in {delta_seconds:.1f}s "
+                    f"(<{self._outlier_min_speed_check_seconds}s)"
+                )
+
+        if delta_seconds <= 0:
+            return None
+
+        if delta_seconds >= self._outlier_min_speed_check_seconds and self._outlier_max_speed_mps > 0:
+            speed_mps = distance_meters / delta_seconds
+            if speed_mps > self._outlier_max_speed_mps:
+                return (
+                    f"speed {speed_mps:.1f}m/s exceeds limit "
+                    f"{self._outlier_max_speed_mps:.1f}m/s"
+                )
+
+        return None
 
     def _should_compact_latest_run(self, location: TileLocation) -> bool:
         rows = self._connection.execute(

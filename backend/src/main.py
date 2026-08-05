@@ -59,6 +59,12 @@ ws_manager = WebSocketManager()
 history_store = TileHistoryStore(
     db_path=settings.tile_history_db_path,
     max_points_per_tile=settings.tile_history_max_points_per_tile,
+    outlier_filter_enabled=settings.tile_outlier_filter_enabled,
+    outlier_max_speed_mps=settings.tile_outlier_max_speed_mps,
+    outlier_min_speed_check_seconds=settings.tile_outlier_min_speed_check_seconds,
+    outlier_max_jump_meters=settings.tile_outlier_max_jump_meters,
+    outlier_max_future_seconds=settings.tile_outlier_max_future_seconds,
+    outlier_max_staleness_seconds=settings.tile_outlier_max_staleness_seconds,
 )
 tile_client = HomeAssistantTileClient(
     base_url=settings.home_assistant_url,

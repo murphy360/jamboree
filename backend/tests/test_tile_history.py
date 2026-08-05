@@ -9,8 +9,8 @@ from src.services.leaderboard_store import LeaderboardStore
 from src.services.models import AreaPolygonPoint, TileLocation
 
 
-def build_history_store(tmp_path, name: str) -> TileHistoryStore:
-    return TileHistoryStore(db_path=str(tmp_path / name))
+def build_history_store(tmp_path, name: str, **kwargs) -> TileHistoryStore:
+    return TileHistoryStore(db_path=str(tmp_path / name), **kwargs)
 
 
 def test_tile_history_endpoint_returns_recorded_positions(tmp_path) -> None:
@@ -253,6 +253,76 @@ def test_record_keeps_only_first_and_last_stationary_breadcrumb(tmp_path) -> Non
     assert len(history) == 2
     assert history[0].observed_at.isoformat() == "2026-05-19T15:00:00+00:00"
     assert history[1].observed_at.isoformat() == "2026-05-19T15:10:00+00:00"
+
+
+def test_record_filters_short_window_large_jump_outlier(tmp_path) -> None:
+    history_store = build_history_store(
+        tmp_path,
+        "outlier-jump.db",
+        outlier_filter_enabled=True,
+        outlier_max_jump_meters=1000,
+        outlier_min_speed_check_seconds=10,
+        outlier_max_speed_mps=400,
+    )
+    history_store.record(
+        [
+            TileLocation(
+                tile_uuid="device_tracker.tile_jump",
+                latitude=38.1000,
+                longitude=-81.2000,
+                observed_at=datetime(2026, 8, 5, 12, 0, tzinfo=UTC),
+                label="Tile Jump",
+            ),
+            TileLocation(
+                tile_uuid="device_tracker.tile_jump",
+                latitude=38.3000,
+                longitude=-81.4000,
+                observed_at=datetime(2026, 8, 5, 12, 0, 5, tzinfo=UTC),
+                label="Tile Jump",
+            ),
+        ]
+    )
+
+    history = history_store.get_history("device_tracker.tile_jump")
+
+    assert len(history) == 1
+    assert history[0].latitude == 38.1000
+    assert history[0].longitude == -81.2000
+
+
+def test_record_filters_impossible_speed_outlier(tmp_path) -> None:
+    history_store = build_history_store(
+        tmp_path,
+        "outlier-speed.db",
+        outlier_filter_enabled=True,
+        outlier_max_jump_meters=200000,
+        outlier_min_speed_check_seconds=10,
+        outlier_max_speed_mps=20,
+    )
+    history_store.record(
+        [
+            TileLocation(
+                tile_uuid="device_tracker.tile_speed",
+                latitude=38.1000,
+                longitude=-81.2000,
+                observed_at=datetime(2026, 8, 5, 12, 0, tzinfo=UTC),
+                label="Tile Speed",
+            ),
+            TileLocation(
+                tile_uuid="device_tracker.tile_speed",
+                latitude=38.1300,
+                longitude=-81.2300,
+                observed_at=datetime(2026, 8, 5, 12, 1, tzinfo=UTC),
+                label="Tile Speed",
+            ),
+        ]
+    )
+
+    history = history_store.get_history("device_tracker.tile_speed")
+
+    assert len(history) == 1
+    assert history[0].latitude == 38.1000
+    assert history[0].longitude == -81.2000
 
 
 def test_dedupe_consecutive_points_removes_adjacent_exact_duplicates(tmp_path) -> None:

@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     tile_poll_interval_seconds: int = Field(default=15, ge=5, le=300)
     tile_history_db_path: str = "/app/data/tile_history.db"
     tile_history_max_points_per_tile: int = Field(default=0, ge=0, le=20000)
+    tile_outlier_filter_enabled: bool = False
+    tile_outlier_max_speed_mps: float = Field(default=45.0, ge=0, le=300)
+    tile_outlier_min_speed_check_seconds: int = Field(default=10, ge=1, le=3600)
+    tile_outlier_max_jump_meters: float = Field(default=1200.0, ge=0, le=20000)
+    tile_outlier_max_future_seconds: int = Field(default=180, ge=0, le=86400)
+    tile_outlier_max_staleness_seconds: int = Field(default=0, ge=0, le=604800)
     tile_history_api_default_limit: int = Field(default=7000, ge=0, le=50000)
     tile_details_api_default_limit: int = Field(default=7000, ge=0, le=50000)
     tile_leaderboard_history_points_limit: int = Field(default=5000, ge=0, le=50000)
