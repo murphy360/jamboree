@@ -36,9 +36,11 @@ Set these values in `backend/.env`:
 - `TILE_LEADERBOARD_CACHE_TTL_SECONDS` (`20` by default; backend-maintained in-memory leaderboard cache lifetime)
 - `TILE_DWELL_MERGE_RADIUS_METERS` (`50` by default; merges nearby dwell hotspots into one cluster)
 - `MYMAPS_IMPORT_ENABLED` (`true` by default; enables Google My Maps KML sync)
+- `MYMAPS_IMPORT_STARTUP_ONLY` (`true` by default; runs My Maps import once on backend startup)
+- `MYMAPS_IMPORT_STARTUP_MARKER_NAME` (`mymaps_import_startup.done` by default; marker file in backend data directory that prevents re-import on restart)
 - `MYMAPS_KML_URL` (KML feed URL used for imports)
 - `MYMAPS_IMPORT_TILE_UUID` (`global` by default)
-- `MYMAPS_IMPORT_INTERVAL_SECONDS` (`900` by default; sync interval in seconds)
+- `MYMAPS_IMPORT_INTERVAL_SECONDS` (`900` by default; used only when startup-only mode is disabled)
 - `MYMAPS_POLYGON_EXCLUDE_PREFIXES` (comma-separated name prefixes skipped during polygon import; for example `feature,AP-,BC-OAA-`)
 - `MYMAPS_POLYGON_MERGE_RULES` (`BARR:Barrels,BOWS:Bows` by default; applied automatically after each My Maps sync)
 
@@ -59,7 +61,9 @@ Remove a tracker and all locally stored history/custom areas:
 
 Google My Maps import behavior:
 - Runs automatically on backend startup.
-- Re-runs periodically based on `MYMAPS_IMPORT_INTERVAL_SECONDS`.
+- By default runs only until a startup marker exists, then skips on future restarts.
+- Marker lives in the backend data directory (same directory as `TILE_HISTORY_DB_PATH`) and can be deleted to force another automatic startup import.
+- Optional recurring mode: set `MYMAPS_IMPORT_STARTUP_ONLY=false` to re-run periodically based on `MYMAPS_IMPORT_INTERVAL_SECONDS`.
 - Replaces previously imported non-manual geometries while keeping manual areas intact.
 - Skips polygon imports whose names start with any prefix listed in `MYMAPS_POLYGON_EXCLUDE_PREFIXES`.
 - Automatically merges configured prefix groups into canonical polygons after each sync (default: `BARR* -> Barrels`, `BOWS* -> Bows`).

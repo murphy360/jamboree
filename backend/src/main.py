@@ -103,6 +103,28 @@ one_shot_reset_task: asyncio.Task | None = None
 one_shot_reset_shutdown = asyncio.Event()
 
 
+def _mymaps_startup_marker_path() -> Path:
+    return Path(settings.tile_history_db_path).with_name(settings.mymaps_import_startup_marker_name)
+
+
+async def run_startup_only_mymaps_import() -> bool:
+    marker_path = _mymaps_startup_marker_path()
+    if marker_path.exists():
+        LOGGER.info("Startup-only My Maps import skipped; marker exists at %s", marker_path)
+        return False
+
+    try:
+        await mymaps_sync_service.sync_once()
+    except Exception as exc:  # pragma: no cover - defensive startup logging
+        LOGGER.exception("Startup-only My Maps import failed: %s", exc)
+        return False
+
+    marker_path.parent.mkdir(parents=True, exist_ok=True)
+    marker_path.write_text(datetime.now(ZoneInfo("UTC")).isoformat(), encoding="utf-8")
+    LOGGER.info("Startup-only My Maps import completed; marker written to %s", marker_path)
+    return True
+
+
 async def run_one_shot_tracker_reset() -> None:
     for reset_key, reset_at in sorted(ONE_SHOT_RESETS, key=lambda item: item[1]):
         marker_path = Path(settings.tile_history_db_path).with_name(f"tracker_reset_{reset_key}.done")
@@ -149,11 +171,15 @@ async def startup() -> None:
     poller_task = asyncio.create_task(poller.run())
     print("=== STARTUP: Poller task started")
     if settings.mymaps_import_enabled:
-        print(
-            "=== STARTUP: My Maps sync enabled "
-            f"interval={settings.mymaps_import_interval_seconds}s"
-        )
-        mymaps_sync_task = asyncio.create_task(mymaps_sync_service.run())
+        if settings.mymaps_import_startup_only:
+            print("=== STARTUP: My Maps import enabled (startup-only mode)")
+            await run_startup_only_mymaps_import()
+        else:
+            print(
+                "=== STARTUP: My Maps sync enabled (recurring mode) "
+                f"interval={settings.mymaps_import_interval_seconds}s"
+            )
+            mymaps_sync_task = asyncio.create_task(mymaps_sync_service.run())
     one_shot_reset_shutdown.clear()
     one_shot_reset_task = asyncio.create_task(run_one_shot_tracker_reset())
 

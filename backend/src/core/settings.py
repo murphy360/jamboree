@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     tile_area_hotspot_buffer_meters: int = Field(default=50, ge=0, le=500)
     backend_cors_origins: str = "*"
     mymaps_import_enabled: bool = True
+    mymaps_import_startup_only: bool = True
+    mymaps_import_startup_marker_name: str = "mymaps_import_startup.done"
     mymaps_import_tile_uuid: str = "global"
     mymaps_kml_url: str = (
         "https://www.google.com/maps/d/kml?mid=1ZZEHtl-b2MjqlONDJMxWRzS0y3AzSqI&forcekml=1"
