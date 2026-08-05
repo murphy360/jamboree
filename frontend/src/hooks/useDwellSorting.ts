@@ -494,7 +494,17 @@ export function useDwellSorting(details: TileDetails, areaPolygons: AreaPolygonP
 
     const transientVisitMaxMinutes = getTransientVisitMaxMinutes();
     const consecutiveMerged = mergeConsecutiveAreaVisits(timelineRows);
-    const items = suppressTransientAreaTransitions(consecutiveMerged, transientVisitMaxMinutes);
+    const smoothedItems = suppressTransientAreaTransitions(consecutiveMerged, transientVisitMaxMinutes);
+
+    // Re-resolve labels after smoothing because merged row centers/time windows can shift.
+    const items = smoothedItems.map((visit) => {
+      const resolution = getVisitLocationDescriptor(visit, details.custom_areas, timedPoints);
+      return {
+        ...visit,
+        ...resolution.descriptor,
+        resolutionDebug: `${resolution.resolutionDebug}; post-merge-relabel=true`,
+      };
+    });
 
     if (timelineSort === "oldest") {
       items.sort(
