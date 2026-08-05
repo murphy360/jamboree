@@ -4,7 +4,7 @@ import type { DwellViewMode, DwellTimeFilter } from "../utils/dwellAnalytics";
 import type { TileDetails, AreaPolygonPoint } from "../hooks/useTileDetails";
 
 type OverallSort = "minutes" | "visits" | "samples";
-type TimelineSort = "recent" | "duration";
+type TimelineSort = "recent" | "oldest";
 
 export type SelectedHotspot = {
   latitude: number;
@@ -149,7 +149,7 @@ export function DwellHotspotsPanel({ details, selectedHotspot, onSelectHotspot, 
         />
       ) : (
         <TimelineVisitList
-          sortedTimeline={sorting.groupedTimeline} selectedHotspot={selectedHotspot}
+          sortedTimeline={sorting.sortedTimeline} selectedHotspot={selectedHotspot}
           selectMode={areaSelect.selectMode} selectedIds={areaSelect.selectedIds}
           onSelectHotspot={onSelectHotspot} onToggleId={areaSelect.toggleId}
         />
@@ -192,7 +192,7 @@ function DwellControls({ viewMode, timeFilter, overallSort, timelineSort, select
           <span>Sort</span>
           <select id="dwell-timeline-sort" value={timelineSort} onChange={(e) => onTimelineSortChange(e.target.value as TimelineSort)}>
             <option value="recent">Most recent</option>
-            <option value="duration">Longest stay</option>
+            <option value="oldest">Route order (oldest first)</option>
           </select>
         </label>
       )}

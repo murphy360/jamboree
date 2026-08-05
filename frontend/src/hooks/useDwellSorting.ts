@@ -3,7 +3,7 @@ import { analyzeDwellHotspots, type DwellTimeFilter, type DwellViewMode } from "
 import type { TileDetails, AreaPolygonPoint, CustomArea } from "./useTileDetails";
 
 type OverallSort = "minutes" | "visits" | "samples";
-type TimelineSort = "recent" | "duration";
+type TimelineSort = "recent" | "oldest";
 
 export type DwellLocationKind = "area" | "hotspot";
 
@@ -215,46 +215,21 @@ export function useDwellSorting(details: TileDetails, areaPolygons: AreaPolygonP
       ...visit,
       ...getLocationDescriptor(visit.latitude, visit.longitude, visit.hotspotId, details.custom_areas),
     }));
-    if (timelineSort === "duration") items.sort((a, b) => b.minutesSpent - a.minutesSpent || b.samples - a.samples);
-    else items.sort((a, b) => new Date(b.startObservedAt).getTime() - new Date(a.startObservedAt).getTime() || b.minutesSpent - a.minutesSpent);
-    return items.slice(0, 18);
+    if (timelineSort === "oldest") {
+      items.sort(
+        (a, b) =>
+          new Date(a.startObservedAt).getTime() - new Date(b.startObservedAt).getTime() ||
+          b.minutesSpent - a.minutesSpent,
+      );
+    } else {
+      items.sort(
+        (a, b) =>
+          new Date(b.startObservedAt).getTime() - new Date(a.startObservedAt).getTime() ||
+          b.minutesSpent - a.minutesSpent,
+      );
+    }
+    return items;
   }, [details.custom_areas, dwellForTimeline.visits, timelineSort]);
-
-  const groupedTimeline = useMemo(() => {
-    const groupedItems: Record<string, DwellTimelineDisplayRow[]> = {};
-
-    sortedTimeline.forEach((event) => {
-      if (event.locationKind === "area") {
-        const areaId = event.entryId.slice("area:".length);
-        if (!groupedItems[areaId]) {
-          groupedItems[areaId] = [];
-        }
-        groupedItems[areaId].push(event);
-      } else {
-        // Handle hotspots outside areas
-        const hotspotId = event.entryId;
-        if (!groupedItems[hotspotId]) {
-          groupedItems[hotspotId] = [];
-        }
-        groupedItems[hotspotId].push(event);
-      }
-    });
-
-    return Object.entries(groupedItems).map(([id, events]) => {
-      const firstEvent = events[0];
-      const totalMinutes = events.reduce((sum, e) => sum + e.minutesSpent, 0);
-      const totalSamples = events.reduce((sum, e) => sum + e.samples, 0);
-      const totalVisits = events.length;
-
-      return {
-        ...firstEvent,
-        minutesSpent: totalMinutes,
-        samples: totalSamples,
-        visitCount: totalVisits,
-        events,
-      };
-    });
-  }, [sortedTimeline]);
 
   return {
     viewMode, setViewMode,
@@ -265,6 +240,5 @@ export function useDwellSorting(details: TileDetails, areaPolygons: AreaPolygonP
     sortedOverall,
     selectableLocations,
     sortedTimeline,
-    groupedTimeline,
   };
 }
