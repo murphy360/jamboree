@@ -263,8 +263,6 @@ class AreaStore:
         merge_source_area_ids = merge_source_area_ids or []
         hotspot_centers = hotspot_centers or []
         target = self._get_area_by_id(merge_into_area_id)
-        if not target:
-            raise ValueError("Merge target area was not found.")
 
         source_ids = {area_id for area_id in merge_source_area_ids if area_id != merge_into_area_id}
         source_areas = [self._get_area_by_id(area_id) for area_id in source_ids]
@@ -275,6 +273,15 @@ class AreaStore:
         for area in source_areas:
             assert area is not None
             validated_sources.append(area)
+
+        if target is None:
+            if not validated_sources:
+                raise ValueError("Merge target area was not found.")
+
+            target = validated_sources[0]
+            merge_into_area_id = target.area_id
+            source_ids.discard(merge_into_area_id)
+            validated_sources = validated_sources[1:]
 
         points: list[tuple[float, float]] = [
             (point.latitude, point.longitude) for point in target.polygon

@@ -231,6 +231,40 @@ def test_merge_area_rejects_missing_target(tmp_path):
         )
 
 
+def test_merge_area_falls_back_to_first_source_when_target_missing(tmp_path):
+    store = make_store(tmp_path)
+    source_one = store.create_area(
+        "global",
+        "Source One",
+        [
+            AreaPolygonPoint(latitude=38.070, longitude=-81.070),
+            AreaPolygonPoint(latitude=38.071, longitude=-81.070),
+            AreaPolygonPoint(latitude=38.0705, longitude=-81.069),
+        ],
+    )
+    source_two = store.create_area(
+        "global",
+        "Source Two",
+        [
+            AreaPolygonPoint(latitude=38.080, longitude=-81.080),
+            AreaPolygonPoint(latitude=38.081, longitude=-81.080),
+            AreaPolygonPoint(latitude=38.0805, longitude=-81.079),
+        ],
+    )
+
+    merged = store.merge_area(
+        tile_uuid="global",
+        merge_into_area_id="missing-target-id",
+        cluster_centers=[],
+        merge_source_area_ids=[source_one.area_id, source_two.area_id],
+    )
+
+    assert merged.area_id == source_one.area_id
+    remaining = store.get_areas("global")
+    assert len(remaining) == 1
+    assert remaining[0].area_id == source_one.area_id
+
+
 def test_merge_area_buffers_hotspot_range(tmp_path):
     store = make_store(tmp_path)
     target = store.create_area(
