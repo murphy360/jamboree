@@ -9,6 +9,7 @@ interface ImportMetaEnv {
   readonly VITE_TILE_DETAILS_INITIAL_BATCH?: string;
   readonly VITE_TILE_HISTORY_DEDUPE_TOLERANCE_METERS?: string;
   readonly VITE_TILE_DETAILS_DEDUPE_TOLERANCE_METERS?: string;
+  readonly VITE_DWELL_MERGE_RADIUS_METERS?: string;
 }
 
 interface ImportMeta {

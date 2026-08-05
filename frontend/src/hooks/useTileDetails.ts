@@ -57,7 +57,7 @@ const DEFAULT_TILE_DETAILS_INITIAL_BATCH = Number(
   import.meta.env.VITE_TILE_DETAILS_INITIAL_BATCH ?? "1000",
 );
 const DEFAULT_TILE_DETAILS_DEDUPE_TOLERANCE_METERS = Number(
-  import.meta.env.VITE_TILE_DETAILS_DEDUPE_TOLERANCE_METERS ?? "8",
+  import.meta.env.VITE_TILE_DETAILS_DEDUPE_TOLERANCE_METERS ?? "20",
 );
 
 function buildDetailsUrl(baseUrl: string, tileUuid: string): string {

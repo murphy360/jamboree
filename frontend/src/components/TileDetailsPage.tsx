@@ -103,6 +103,10 @@ function parseObservedAtMs(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+const DEFAULT_DWELL_MERGE_RADIUS_METERS = Number(
+  import.meta.env.VITE_DWELL_MERGE_RADIUS_METERS ?? "100",
+);
+
 export function TileDetailsPage({ details, loading, onBack, onTrackerRemoved, baseUrl, tileUuid, onRefreshDetails, showGisLayers }: TileDetailsPageProps) {
   if (loading && !details) {
     return (
@@ -269,7 +273,7 @@ function DetailsContent({ details, loading, onBack, onTrackerRemoved, baseUrl, t
       filteredItems,
       "ever",
       filteredItems[filteredItems.length - 1].observed_at,
-      50,
+      DEFAULT_DWELL_MERGE_RADIUS_METERS,
       30,
       details.custom_areas.map((area) => area.polygon),
     );

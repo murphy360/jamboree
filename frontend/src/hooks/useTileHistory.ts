@@ -15,7 +15,7 @@ const DEFAULT_TILE_HISTORY_INITIAL_BATCH = Number(
   import.meta.env.VITE_TILE_HISTORY_INITIAL_BATCH ?? "1000",
 );
 const DEFAULT_TILE_HISTORY_DEDUPE_TOLERANCE_METERS = Number(
-  import.meta.env.VITE_TILE_HISTORY_DEDUPE_TOLERANCE_METERS ?? "8",
+  import.meta.env.VITE_TILE_HISTORY_DEDUPE_TOLERANCE_METERS ?? "20",
 );
 
 function buildHistoryUrl(baseUrl: string, tileUuid: string): string {
