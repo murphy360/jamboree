@@ -82,6 +82,32 @@ def test_create_area_persists_and_retrieves(tmp_path):
     assert areas[0].name == "Camp Alpha"
 
 
+def test_create_area_preserve_shape_keeps_concavity(tmp_path):
+    store = make_store(tmp_path)
+    concave_outline = [
+        AreaPolygonPoint(latitude=0.0, longitude=0.0),
+        AreaPolygonPoint(latitude=0.0, longitude=3.0),
+        AreaPolygonPoint(latitude=1.0, longitude=3.0),
+        AreaPolygonPoint(latitude=1.0, longitude=1.0),
+        AreaPolygonPoint(latitude=3.0, longitude=1.0),
+        AreaPolygonPoint(latitude=3.0, longitude=0.0),
+    ]
+
+    area = store.create_area(
+        "tile_uuid_1",
+        "Concave Drawn Area",
+        concave_outline,
+        preserve_shape=True,
+    )
+
+    # Interior points in both arms of the L-shape should remain inside.
+    assert point_in_polygon(0.5, 2.5, area.polygon) is True
+    assert point_in_polygon(2.5, 0.5, area.polygon) is True
+
+    # The notch should remain outside; convex hull would incorrectly include it.
+    assert point_in_polygon(2.5, 2.5, area.polygon) is False
+
+
 def test_update_area_renames_it(tmp_path):
     store = make_store(tmp_path)
     centers = [(38.07, -81.07), (38.08, -81.07), (38.075, -81.06)]

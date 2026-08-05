@@ -395,7 +395,7 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
       }
 
       try {
-        await createArea(name, points);
+        await createArea(name, points, { preserveShape: true });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to create area.";
         window.alert(message);

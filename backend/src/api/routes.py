@@ -274,7 +274,12 @@ async def create_area(
             )
             leaderboard_store.invalidate_cache()
             return merged
-        created = area_store.create_area(tile_uuid, body.name, body.cluster_centers)
+        created = area_store.create_area(
+            tile_uuid,
+            body.name,
+            body.cluster_centers,
+            preserve_shape=body.preserve_shape,
+        )
         leaderboard_store.invalidate_cache()
         return created
     except ValueError as exc:

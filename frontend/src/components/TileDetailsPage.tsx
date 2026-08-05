@@ -91,6 +91,13 @@ function defaultRangeForYear(year: number): { start: string; end: string } {
   };
 }
 
+function rangeForDay(day: string): { start: string; end: string } {
+  return {
+    start: `${day}T00:00`,
+    end: `${day}T23:59`,
+  };
+}
+
 function parseObservedAtMs(value: string): number | null {
   const parsed = new Date(value).getTime();
   return Number.isFinite(parsed) ? parsed : null;
@@ -196,16 +203,6 @@ function DetailsContent({ details, loading, onBack, onTrackerRemoved, baseUrl, t
     () => [...details.daily_breakdown].sort((a, b) => b.date.localeCompare(a.date)),
     [details.daily_breakdown],
   );
-
-  useEffect(() => {
-    if (selectedDay === "all") {
-      return;
-    }
-    if (!availableDays.some((day) => day.date === selectedDay)) {
-      setSelectedDay("all");
-      setSelectedHotspot(null);
-    }
-  }, [availableDays, selectedDay]);
 
   const normalizedRange = useMemo(() => {
     const startMs = rangeStart ? new Date(rangeStart).getTime() : null;
@@ -331,14 +328,27 @@ function DetailsContent({ details, loading, onBack, onTrackerRemoved, baseUrl, t
 
   const handleDayChange = useCallback((value: string) => {
     setSelectedDay(value);
+
+    if (value === "all") {
+      const observedYear = new Date(details.last_observed_at).getFullYear();
+      const fallbackYear = Number.isFinite(observedYear) ? observedYear : new Date().getFullYear();
+      const defaults = defaultRangeForYear(fallbackYear);
+      setRangeStart(defaults.start);
+      setRangeEnd(defaults.end);
+    } else {
+      const dayRange = rangeForDay(value);
+      setRangeStart(dayRange.start);
+      setRangeEnd(dayRange.end);
+    }
+
     setSelectedHotspot(null);
-  }, []);
+  }, [details.last_observed_at]);
 
   const handleBreakdownDayClick = useCallback((value: string) => {
     setSelectedDay(value);
-    // Day clicks should show all points for that day, independent of start/end window.
-    setRangeStart("");
-    setRangeEnd("");
+    const dayRange = rangeForDay(value);
+    setRangeStart(dayRange.start);
+    setRangeEnd(dayRange.end);
     setSelectedHotspot(null);
   }, []);
 

@@ -89,6 +89,7 @@ class AreaMergeUndoState(BaseModel):
 class CreateAreaRequest(BaseModel):
     name: str
     cluster_centers: list[AreaPolygonPoint]
+    preserve_shape: bool = False
     hotspot_centers: list[AreaPolygonPoint] = Field(default_factory=list)
     merge_into_area_id: str | None = None
     merge_source_area_ids: list[str] = Field(default_factory=list)

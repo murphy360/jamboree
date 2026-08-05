@@ -12,6 +12,7 @@ type CreateAreaOptions = {
   mergeIntoAreaId?: string;
   mergeSourceAreaIds?: string[];
   hotspotCenters?: AreaPolygonPoint[];
+  preserveShape?: boolean;
 };
 
 type MergeUndoState = {
@@ -81,6 +82,7 @@ export function useCustomAreas({ baseUrl, tileUuid, onRefresh }: UseCustomAreasO
           body: JSON.stringify({
             name,
             cluster_centers: clusterCenters,
+            preserve_shape: options?.preserveShape ?? false,
             hotspot_centers: hotspotCenters,
             merge_into_area_id: options?.mergeIntoAreaId,
             merge_source_area_ids: mergeSourceAreaIds,

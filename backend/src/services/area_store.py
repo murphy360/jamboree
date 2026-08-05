@@ -269,20 +269,29 @@ class AreaStore:
         tile_uuid: str,
         name: str,
         cluster_centers: list[AreaPolygonPoint | tuple[float, float]],
+        preserve_shape: bool = False,
         source_type: str = "manual",
         source_name: str | None = None,
         source_url: str | None = None,
         source_feature_id: str | None = None,
     ) -> CustomArea:
-        """Compute convex hull of cluster centers and persist the area."""
+        """Persist area polygon from points; default to convex hull for cluster-based inputs."""
         raw_points: list[tuple[float, float]] = []
         for center in cluster_centers:
             if isinstance(center, tuple):
                 raw_points.append((center[0], center[1]))
             else:
                 raw_points.append((center.latitude, center.longitude))
-        hull = convex_hull(raw_points)
-        polygon = [AreaPolygonPoint(latitude=lat, longitude=lon) for lat, lon in hull]
+
+        if preserve_shape:
+            geometry = _to_shapely_polygon(raw_points)
+            if geometry is None:
+                raise ValueError("At least 3 valid polygon points are required.")
+            outline = _polygon_exterior_to_latlon(geometry)
+        else:
+            outline = convex_hull(raw_points)
+
+        polygon = [AreaPolygonPoint(latitude=lat, longitude=lon) for lat, lon in outline]
         area_id = str(uuid.uuid4())
         now = datetime.now(UTC).isoformat()
         polygon_json = json.dumps(
