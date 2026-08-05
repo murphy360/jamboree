@@ -50,6 +50,8 @@ type LocationDescriptor = {
   areaId?: string;
 };
 
+type TimelineDisplayRowWithArea = DwellTimelineDisplayRow & { areaId?: string };
+
 function pointInPolygon(lat: number, lon: number, polygon: AreaPolygonPoint[]): boolean {
   const n = polygon.length;
   if (n < 3) return false;
@@ -111,6 +113,38 @@ function getLocationDescriptor(lat: number, lon: number, hotspotId: number, area
     locationKind: "hotspot",
     locationLabel: `Hotspot #${hotspotId + 1}`,
   };
+}
+
+function mergeConsecutiveAreaVisits(visits: TimelineDisplayRowWithArea[]): TimelineDisplayRowWithArea[] {
+  if (visits.length === 0) {
+    return [];
+  }
+
+  const merged: TimelineDisplayRowWithArea[] = [];
+
+  visits.forEach((visit) => {
+    const prev = merged[merged.length - 1];
+    const sameAreaAsPrevious =
+      prev &&
+      visit.locationKind === "area" &&
+      prev.locationKind === "area" &&
+      Boolean(visit.areaId) &&
+      visit.areaId === prev.areaId;
+
+    if (!sameAreaAsPrevious || !prev) {
+      merged.push({ ...visit });
+      return;
+    }
+
+    const combinedSamples = prev.samples + visit.samples;
+    prev.endObservedAt = visit.endObservedAt;
+    prev.minutesSpent += visit.minutesSpent;
+    prev.latitude = (prev.latitude * prev.samples + visit.latitude * visit.samples) / combinedSamples;
+    prev.longitude = (prev.longitude * prev.samples + visit.longitude * visit.samples) / combinedSamples;
+    prev.samples = combinedSamples;
+  });
+
+  return merged;
 }
 
 export function useDwellSorting(details: TileDetails, areaPolygons: AreaPolygonPoint[][]) {
@@ -211,10 +245,13 @@ export function useDwellSorting(details: TileDetails, areaPolygons: AreaPolygonP
   }, [allOverall, details.custom_areas]);
 
   const sortedTimeline = useMemo(() => {
-    const items = dwellForTimeline.visits.map((visit) => ({
+    const timelineRows = dwellForTimeline.visits.map((visit) => ({
       ...visit,
       ...getLocationDescriptor(visit.latitude, visit.longitude, visit.hotspotId, details.custom_areas),
     }));
+
+    const items = mergeConsecutiveAreaVisits(timelineRows);
+
     if (timelineSort === "oldest") {
       items.sort(
         (a, b) =>
