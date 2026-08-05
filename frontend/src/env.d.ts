@@ -11,6 +11,7 @@ interface ImportMetaEnv {
   readonly VITE_TILE_DETAILS_DEDUPE_TOLERANCE_METERS?: string;
   readonly VITE_DWELL_MERGE_RADIUS_METERS?: string;
   readonly VITE_DWELL_TRANSIENT_VISIT_MAX_MINUTES?: string;
+  readonly VITE_AREA_LABEL_PRIORITY?: string;
 }
 
 interface ImportMeta {

@@ -53,6 +53,12 @@ type LocationDescriptor = {
 type TimelineDisplayRowWithArea = DwellTimelineDisplayRow & { areaId?: string };
 
 const DEFAULT_TRANSIENT_VISIT_MAX_MINUTES = 8;
+const DEFAULT_AREA_LABEL_PRIORITY = "subcamp:300,camp:220,village:180,headquarters:120,hq:110,patch:40,piggot:30";
+
+type AreaPriorityRule = {
+  keyword: string;
+  weight: number;
+};
 
 function getTransientVisitMaxMinutes(): number {
   const configured = Number(import.meta.env.VITE_DWELL_TRANSIENT_VISIT_MAX_MINUTES ?? "");
@@ -60,6 +66,38 @@ function getTransientVisitMaxMinutes(): number {
     return DEFAULT_TRANSIENT_VISIT_MAX_MINUTES;
   }
   return configured;
+}
+
+function parseAreaPriorityRules(value: string): AreaPriorityRule[] {
+  return value
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .map((part) => {
+      const [rawKeyword, rawWeight] = part.split(":");
+      const keyword = (rawKeyword ?? "").trim().toLowerCase();
+      const weight = Number((rawWeight ?? "").trim());
+      if (!keyword || !Number.isFinite(weight)) {
+        return null;
+      }
+      return { keyword, weight } satisfies AreaPriorityRule;
+    })
+    .filter((rule): rule is AreaPriorityRule => Boolean(rule));
+}
+
+const AREA_PRIORITY_RULES = parseAreaPriorityRules(
+  import.meta.env.VITE_AREA_LABEL_PRIORITY ?? DEFAULT_AREA_LABEL_PRIORITY,
+);
+
+function areaPriorityScore(area: CustomArea): number {
+  const name = area.name.toLowerCase();
+  let best = 0;
+  AREA_PRIORITY_RULES.forEach((rule) => {
+    if (name.includes(rule.keyword)) {
+      best = Math.max(best, rule.weight);
+    }
+  });
+  return best;
 }
 
 function pointInPolygon(lat: number, lon: number, polygon: AreaPolygonPoint[]): boolean {
@@ -126,8 +164,14 @@ function polygonAreaScore(polygon: AreaPolygonPoint[]): number {
 function getLocationDescriptor(lat: number, lon: number, hotspotId: number, areas: CustomArea[]): LocationDescriptor {
   const containingAreas = areas.filter((candidate) => pointInPolygon(lat, lon, candidate.polygon));
   const area = containingAreas.length > 0
-    ? containingAreas.reduce((best, current) =>
-      polygonAreaScore(current.polygon) > polygonAreaScore(best.polygon) ? current : best)
+    ? containingAreas.reduce((best, current) => {
+      const bestPriority = areaPriorityScore(best);
+      const currentPriority = areaPriorityScore(current);
+      if (currentPriority !== bestPriority) {
+        return currentPriority > bestPriority ? current : best;
+      }
+      return polygonAreaScore(current.polygon) > polygonAreaScore(best.polygon) ? current : best;
+    })
     : null;
 
   if (area) {

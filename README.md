@@ -109,6 +109,12 @@ Frontend dedupe of adjacent points (enabled by default) is controlled by:
 Frontend timeline suppression of brief area flicker (`A -> B -> A`) is controlled by:
 - `VITE_DWELL_TRANSIENT_VISIT_MAX_MINUTES` (default `8`)
 
+When multiple area polygons overlap a point, frontend label precedence is controlled by:
+- `VITE_AREA_LABEL_PRIORITY` (default `subcamp:300,camp:220,village:180,headquarters:120,hq:110,patch:40,piggot:30`)
+
+Format: comma-separated `keyword:weight` entries. The matching containing area with the highest weight is selected.
+If weights tie, the larger polygon footprint wins.
+
 Frontend incremental loading starts with the newest points first, then expands backward. Initial batch sizes are controlled by:
 - `VITE_TILE_HISTORY_INITIAL_BATCH` (default `1000`)
 - `VITE_TILE_DETAILS_INITIAL_BATCH` (default `1000`)
