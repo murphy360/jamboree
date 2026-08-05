@@ -165,7 +165,7 @@ function DetailsContent({ details, loading, onBack, onTrackerRemoved, baseUrl, t
   const [rangeEnd, setRangeEnd] = useState<string>("");
   const [deletePending, setDeletePending] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const { createArea, renameArea, deleteArea, deleteAreas, mergeAreas } = useCustomAreas({
+  const { createArea, renameArea, deleteArea, deleteAreas, mergeAreas, latestMergeUndo, undoMerge } = useCustomAreas({
     baseUrl,
     tileUuid,
     onRefresh: onRefreshDetails,
@@ -516,6 +516,8 @@ function DetailsContent({ details, loading, onBack, onTrackerRemoved, baseUrl, t
           onDelete={deleteArea}
           onDeleteMany={deleteAreas}
           onMergeAreas={mergeAreas}
+          onUndoMerge={undoMerge}
+          latestMergeUndo={latestMergeUndo}
         />
       </section>
     </section>

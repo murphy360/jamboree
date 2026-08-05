@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 from src.core.settings import HealthResponse, TileStatusResponse, get_settings
 from src.services.models import (
+    AreaMergeUndoState,
     CreateAreaRequest,
     CustomArea,
     LeaderboardResponse,
@@ -265,6 +266,29 @@ async def create_area(
         created = area_store.create_area(tile_uuid, body.name, body.cluster_centers)
         leaderboard_store.invalidate_cache()
         return created
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/tiles/{tile_uuid}/areas/merge-undo", response_model=AreaMergeUndoState)
+async def latest_merge_undo(tile_uuid: str, request: Request) -> AreaMergeUndoState:
+    area_store = request.app.state.area_store
+    latest = area_store.get_latest_merge_undo(tile_uuid)
+    if not latest:
+        raise HTTPException(status_code=404, detail="No merge is available to undo.")
+
+    area_id, area_name, merged_at = latest
+    return AreaMergeUndoState(area_id=area_id, area_name=area_name, merged_at=merged_at)
+
+
+@router.post("/tiles/{tile_uuid}/areas/{area_id}/undo-merge", response_model=CustomArea)
+async def undo_merge(tile_uuid: str, area_id: str, request: Request) -> CustomArea:
+    area_store = request.app.state.area_store
+    leaderboard_store = request.app.state.leaderboard_store
+    try:
+        restored = area_store.undo_merge(tile_uuid=tile_uuid, merge_into_area_id=area_id)
+        leaderboard_store.invalidate_cache()
+        return restored
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

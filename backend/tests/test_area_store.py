@@ -265,6 +265,47 @@ def test_merge_area_falls_back_to_first_source_when_target_missing(tmp_path):
     assert remaining[0].area_id == source_one.area_id
 
 
+def test_undo_merge_restores_target_and_sources(tmp_path):
+    store = make_store(tmp_path)
+    target = store.create_area(
+        "tile_undo",
+        "Undo Target",
+        [
+            AreaPolygonPoint(latitude=38.070, longitude=-81.070),
+            AreaPolygonPoint(latitude=38.071, longitude=-81.070),
+            AreaPolygonPoint(latitude=38.0705, longitude=-81.069),
+        ],
+    )
+    source = store.create_area(
+        "tile_undo",
+        "Undo Source",
+        [
+            AreaPolygonPoint(latitude=38.080, longitude=-81.080),
+            AreaPolygonPoint(latitude=38.081, longitude=-81.080),
+            AreaPolygonPoint(latitude=38.0805, longitude=-81.079),
+        ],
+    )
+
+    merged = store.merge_area(
+        tile_uuid="tile_undo",
+        merge_into_area_id=target.area_id,
+        cluster_centers=[],
+        merge_source_area_ids=[source.area_id],
+    )
+
+    restored = store.undo_merge("tile_undo", merged.area_id)
+
+    assert restored.area_id == target.area_id
+    assert restored.name == "Undo Target"
+
+    remaining = sorted(store.get_areas("tile_undo"), key=lambda area: area.name)
+    assert [area.name for area in remaining] == ["Undo Source", "Undo Target"]
+    assert {area.area_id for area in remaining} == {target.area_id, source.area_id}
+
+    latest = store.get_latest_merge_undo("tile_undo")
+    assert latest is None
+
+
 def test_merge_area_buffers_hotspot_range(tmp_path):
     store = make_store(tmp_path)
     target = store.create_area(

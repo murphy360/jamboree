@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock
+from typing import Any
 
 from src.services.models import AreaPolygonPoint, CustomArea, TileLocation
 
@@ -161,11 +162,30 @@ class AreaStore:
                 )
                 """
             )
+            self._connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS custom_area_merge_events (
+                    event_id TEXT PRIMARY KEY,
+                    tile_uuid TEXT NOT NULL,
+                    merge_into_area_id TEXT NOT NULL,
+                    target_before_json TEXT NOT NULL,
+                    source_areas_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    undone_at TEXT
+                )
+                """
+            )
             self._ensure_columns()
             self._connection.execute(
                 """
                 CREATE INDEX IF NOT EXISTS idx_custom_areas_tile
                 ON custom_areas (tile_uuid)
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_custom_area_merge_events_tile_target_created
+                ON custom_area_merge_events (tile_uuid, merge_into_area_id, created_at DESC)
                 """
             )
             self._connection.commit()
@@ -264,7 +284,13 @@ class AreaStore:
         hotspot_centers = hotspot_centers or []
         target = self._get_area_by_id(merge_into_area_id)
 
-        source_ids = {area_id for area_id in merge_source_area_ids if area_id != merge_into_area_id}
+        source_ids: list[str] = []
+        seen_source_ids: set[str] = set()
+        for area_id in merge_source_area_ids:
+            if area_id == merge_into_area_id or area_id in seen_source_ids:
+                continue
+            seen_source_ids.add(area_id)
+            source_ids.append(area_id)
         source_areas = [self._get_area_by_id(area_id) for area_id in source_ids]
         if any(area is None for area in source_areas):
             raise ValueError("One or more merge source areas were not found.")
@@ -280,8 +306,11 @@ class AreaStore:
 
             target = validated_sources[0]
             merge_into_area_id = target.area_id
-            source_ids.discard(merge_into_area_id)
+            source_ids = [area_id for area_id in source_ids if area_id != merge_into_area_id]
             validated_sources = validated_sources[1:]
+
+        target_snapshot = self._serialize_area_snapshot(target)
+        source_snapshots = [self._serialize_area_snapshot(area) for area in validated_sources]
 
         points: list[tuple[float, float]] = [
             (point.latitude, point.longitude) for point in target.polygon
@@ -304,34 +333,116 @@ class AreaStore:
             [{"latitude": p.latitude, "longitude": p.longitude} for p in polygon]
         )
         now = datetime.now(UTC).isoformat()
+        event_id = str(uuid.uuid4())
 
         with self._lock:
-            self._connection.execute(
-                """
-                UPDATE custom_areas
-                SET polygon_json = ?,
-                    updated_at = ?,
-                    source_type = 'manual',
-                    source_name = NULL,
-                    source_url = NULL,
-                    source_feature_id = NULL
-                WHERE area_id = ?
-                """,
-                (polygon_json, now, merge_into_area_id),
-            )
-
-            if source_ids:
-                placeholders = ",".join("?" for _ in source_ids)
+            try:
+                self._connection.execute("BEGIN")
                 self._connection.execute(
-                    f"DELETE FROM custom_areas WHERE area_id IN ({placeholders})",
-                    tuple(source_ids),
+                    """
+                    UPDATE custom_areas
+                    SET polygon_json = ?,
+                        updated_at = ?,
+                        source_type = 'manual',
+                        source_name = NULL,
+                        source_url = NULL,
+                        source_feature_id = NULL
+                    WHERE area_id = ?
+                    """,
+                    (polygon_json, now, merge_into_area_id),
                 )
 
-            self._connection.commit()
+                if source_ids:
+                    placeholders = ",".join("?" for _ in source_ids)
+                    self._connection.execute(
+                        f"DELETE FROM custom_areas WHERE area_id IN ({placeholders})",
+                        tuple(source_ids),
+                    )
+
+                self._connection.execute(
+                    """
+                    INSERT INTO custom_area_merge_events
+                        (event_id, tile_uuid, merge_into_area_id, target_before_json, source_areas_json, created_at, undone_at)
+                    VALUES (?, ?, ?, ?, ?, ?, NULL)
+                    """,
+                    (
+                        event_id,
+                        tile_uuid,
+                        merge_into_area_id,
+                        json.dumps(target_snapshot),
+                        json.dumps(source_snapshots),
+                        now,
+                    ),
+                )
+                self._connection.commit()
+            except Exception:
+                self._connection.rollback()
+                raise
 
         updated = self._get_area_by_id(merge_into_area_id)
         if not updated:
             raise ValueError("Merged area could not be loaded after update.")
+        return updated
+
+    def get_latest_merge_undo(self, tile_uuid: str) -> tuple[str, str, datetime] | None:
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT merge_into_area_id, target_before_json, created_at
+                FROM custom_area_merge_events
+                WHERE tile_uuid = ? AND undone_at IS NULL
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (tile_uuid,),
+            ).fetchone()
+
+        if not row:
+            return None
+
+        target_snapshot = json.loads(row["target_before_json"])
+        area_name = target_snapshot.get("name", "")
+        merged_at = datetime.fromisoformat(row["created_at"])
+        return (row["merge_into_area_id"], area_name, merged_at)
+
+    def undo_merge(self, tile_uuid: str, merge_into_area_id: str) -> CustomArea:
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT event_id, target_before_json, source_areas_json, created_at
+                FROM custom_area_merge_events
+                WHERE tile_uuid = ? AND merge_into_area_id = ? AND undone_at IS NULL
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (tile_uuid, merge_into_area_id),
+            ).fetchone()
+
+            if not row:
+                raise ValueError("No merge is available to undo for this area.")
+
+            restored_at = datetime.now(UTC).isoformat()
+            target_snapshot = json.loads(row["target_before_json"])
+            source_snapshots = json.loads(row["source_areas_json"])
+
+            try:
+                self._connection.execute("BEGIN")
+                self._upsert_snapshot(target_snapshot, restored_at)
+                for source_snapshot in source_snapshots:
+                    self._upsert_snapshot(source_snapshot, restored_at)
+
+                self._connection.execute(
+                    "UPDATE custom_area_merge_events SET undone_at = ? WHERE event_id = ?",
+                    (restored_at, row["event_id"]),
+                )
+                self._connection.commit()
+            except Exception:
+                self._connection.rollback()
+                raise
+
+        updated = self._get_area_by_id(merge_into_area_id)
+        if not updated:
+            raise ValueError("Merged area could not be restored after undo.")
         return updated
 
     def get_areas(self, tile_uuid: str) -> list[CustomArea]:
@@ -561,6 +672,41 @@ class AreaStore:
             source_name=row["source_name"],
             source_url=row["source_url"],
             source_feature_id=row["source_feature_id"],
+        )
+
+    def _serialize_area_snapshot(self, area: CustomArea) -> dict[str, Any]:
+        return area.model_dump(mode="json")
+
+    def _upsert_snapshot(self, snapshot: dict[str, Any], updated_at: str) -> None:
+        polygon_json = json.dumps(snapshot["polygon"])
+        self._connection.execute(
+            """
+            INSERT INTO custom_areas
+                (area_id, tile_uuid, name, polygon_json, created_at, updated_at, source_type, source_name, source_url, source_feature_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(area_id) DO UPDATE SET
+                tile_uuid = excluded.tile_uuid,
+                name = excluded.name,
+                polygon_json = excluded.polygon_json,
+                created_at = excluded.created_at,
+                updated_at = excluded.updated_at,
+                source_type = excluded.source_type,
+                source_name = excluded.source_name,
+                source_url = excluded.source_url,
+                source_feature_id = excluded.source_feature_id
+            """,
+            (
+                snapshot["area_id"],
+                snapshot["tile_uuid"],
+                snapshot["name"],
+                polygon_json,
+                snapshot["created_at"],
+                updated_at,
+                snapshot.get("source_type", "manual"),
+                snapshot.get("source_name"),
+                snapshot.get("source_url"),
+                snapshot.get("source_feature_id"),
+            ),
         )
 
     def _get_area_by_id(self, area_id: str) -> CustomArea | None:

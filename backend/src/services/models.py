@@ -80,6 +80,12 @@ class CustomArea(BaseModel):
     source_feature_id: str | None = None
 
 
+class AreaMergeUndoState(BaseModel):
+    area_id: str
+    area_name: str
+    merged_at: datetime
+
+
 class CreateAreaRequest(BaseModel):
     name: str
     cluster_centers: list[AreaPolygonPoint]

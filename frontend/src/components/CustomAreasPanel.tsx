@@ -7,6 +7,8 @@ type CustomAreasPanelProps = {
   onDelete: (areaId: string) => Promise<void>;
   onDeleteMany: (areaIds: string[]) => Promise<void>;
   onMergeAreas: (targetAreaId: string, sourceAreaIds: string[]) => Promise<void>;
+  onUndoMerge: (areaId: string) => Promise<void>;
+  latestMergeUndo: { areaId: string; areaName: string; mergedAt: string } | null;
   onFocusAreas?: (areaIds: string[]) => void;
 };
 
@@ -112,7 +114,16 @@ function AreaRow({ area, selected, onToggleSelected, onFocusArea, onRename, onDe
   );
 }
 
-export function CustomAreasPanel({ areas, onRename, onDelete, onDeleteMany, onMergeAreas, onFocusAreas }: CustomAreasPanelProps) {
+export function CustomAreasPanel({
+  areas,
+  onRename,
+  onDelete,
+  onDeleteMany,
+  onMergeAreas,
+  onUndoMerge,
+  latestMergeUndo,
+  onFocusAreas,
+}: CustomAreasPanelProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortMode, setSortMode] = useState<SortMode>("samples-desc");
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -203,6 +214,25 @@ export function CustomAreasPanel({ areas, onRename, onDelete, onDeleteMany, onMe
     }
   };
 
+  const handleUndoMerge = async () => {
+    if (!latestMergeUndo) {
+      return;
+    }
+
+    if (!confirm(`Undo the last merge into "${latestMergeUndo.areaName}"?`)) {
+      return;
+    }
+
+    setBulkBusy(true);
+    try {
+      await onUndoMerge(latestMergeUndo.areaId);
+      setSelectedIds(new Set([latestMergeUndo.areaId]));
+      onFocusAreas?.([latestMergeUndo.areaId]);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   if (areas.length === 0) {
     return (
       <p className="tile-list-empty">
@@ -238,6 +268,15 @@ export function CustomAreasPanel({ areas, onRename, onDelete, onDeleteMany, onMe
             title="Merges into the first selected area in current sort order"
           >
             {bulkBusy ? "Working…" : "Merge selected"}
+          </button>
+          <button
+            type="button"
+            className="tile-area-btn"
+            onClick={() => void handleUndoMerge()}
+            disabled={bulkBusy || !latestMergeUndo}
+            title={latestMergeUndo ? `Undo the last merge into ${latestMergeUndo.areaName}` : "No merge is available to undo"}
+          >
+            Undo merge
           </button>
           <button
             type="button"

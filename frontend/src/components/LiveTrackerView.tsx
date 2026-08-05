@@ -337,7 +337,7 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
     }));
   };
 
-  const { areas, createArea, renameArea, deleteArea, deleteAreas, mergeAreas } = useCustomAreas({
+  const { areas, createArea, renameArea, deleteArea, deleteAreas, mergeAreas, latestMergeUndo, undoMerge } = useCustomAreas({
     baseUrl: backendUrl,
     tileUuid: "global", // Placeholder UUID to fetch global areas
     onRefresh: () => {},
@@ -571,6 +571,8 @@ export function LiveTrackerView({ backendUrl, locations, onOpenDetails, showGisL
             onDelete={deleteArea}
             onDeleteMany={deleteAreas}
             onMergeAreas={mergeAreas}
+            onUndoMerge={undoMerge}
+            latestMergeUndo={latestMergeUndo}
             onFocusAreas={handleFocusAreas}
           />
         </section>

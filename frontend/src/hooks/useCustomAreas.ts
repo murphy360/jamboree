@@ -14,10 +14,17 @@ type CreateAreaOptions = {
   hotspotCenters?: AreaPolygonPoint[];
 };
 
+type MergeUndoState = {
+  areaId: string;
+  areaName: string;
+  mergedAt: string;
+};
+
 export function useCustomAreas({ baseUrl, tileUuid, onRefresh }: UseCustomAreasOptions) {
   const normalizedBaseUrl = useMemo(() => baseUrl.trim().replace(/\/$/, ""), [baseUrl]);
 
   const [areas, setAreas] = useState<CustomArea[]>([]);
+  const [latestMergeUndo, setLatestMergeUndo] = useState<MergeUndoState | null>(null);
 
   const fetchAreas = useCallback(async () => {
     if (!tileUuid || !normalizedBaseUrl) {
@@ -35,9 +42,29 @@ export function useCustomAreas({ baseUrl, tileUuid, onRefresh }: UseCustomAreasO
     setAreas(Array.isArray(data) ? data : data.areas || []);
   }, [normalizedBaseUrl, tileUuid]);
 
+  const fetchLatestMergeUndo = useCallback(async () => {
+    if (!tileUuid || !normalizedBaseUrl) {
+      setLatestMergeUndo(null);
+      return;
+    }
+
+    const response = await fetch(`${normalizedBaseUrl}/tiles/${encodeURIComponent(tileUuid)}/areas/merge-undo`);
+    if (response.status === 404) {
+      setLatestMergeUndo(null);
+      return;
+    }
+    if (!response.ok) {
+      return;
+    }
+
+    const data = (await response.json()) as MergeUndoState;
+    setLatestMergeUndo(data);
+  }, [normalizedBaseUrl, tileUuid]);
+
   useEffect(() => {
     void fetchAreas();
-  }, [fetchAreas]);
+    void fetchLatestMergeUndo();
+  }, [fetchAreas, fetchLatestMergeUndo]);
 
   const createArea = useCallback(
     async (name: string, clusterCenters: AreaPolygonPoint[], options?: CreateAreaOptions): Promise<void> => {
@@ -65,9 +92,10 @@ export function useCustomAreas({ baseUrl, tileUuid, onRefresh }: UseCustomAreasO
         throw new Error(detail.detail ?? `Create area failed (${response.status})`);
       }
       await fetchAreas();
+      await fetchLatestMergeUndo();
       onRefresh();
     },
-    [normalizedBaseUrl, tileUuid, onRefresh, fetchAreas],
+    [normalizedBaseUrl, tileUuid, onRefresh, fetchAreas, fetchLatestMergeUndo],
   );
 
   const renameArea = useCallback(
@@ -87,9 +115,10 @@ export function useCustomAreas({ baseUrl, tileUuid, onRefresh }: UseCustomAreasO
         throw new Error(`Rename failed (${response.status})`);
       }
       await fetchAreas();
+      await fetchLatestMergeUndo();
       onRefresh();
     },
-    [normalizedBaseUrl, tileUuid, onRefresh, fetchAreas],
+    [normalizedBaseUrl, tileUuid, onRefresh, fetchAreas, fetchLatestMergeUndo],
   );
 
   const deleteArea = useCallback(
@@ -105,9 +134,10 @@ export function useCustomAreas({ baseUrl, tileUuid, onRefresh }: UseCustomAreasO
         throw new Error(`Delete failed (${response.status})`);
       }
       await fetchAreas();
+      await fetchLatestMergeUndo();
       onRefresh();
     },
-    [normalizedBaseUrl, tileUuid, onRefresh, fetchAreas],
+    [normalizedBaseUrl, tileUuid, onRefresh, fetchAreas, fetchLatestMergeUndo],
   );
 
   const deleteAreas = useCallback(
@@ -127,9 +157,10 @@ export function useCustomAreas({ baseUrl, tileUuid, onRefresh }: UseCustomAreasO
       }
 
       await fetchAreas();
+      await fetchLatestMergeUndo();
       onRefresh();
     },
-    [normalizedBaseUrl, tileUuid, onRefresh, fetchAreas],
+    [normalizedBaseUrl, tileUuid, onRefresh, fetchAreas, fetchLatestMergeUndo],
   );
 
   const mergeAreas = useCallback(
@@ -162,10 +193,34 @@ export function useCustomAreas({ baseUrl, tileUuid, onRefresh }: UseCustomAreasO
       }
 
       await fetchAreas();
+      await fetchLatestMergeUndo();
       onRefresh();
     },
-    [normalizedBaseUrl, tileUuid, onRefresh, fetchAreas],
+    [normalizedBaseUrl, tileUuid, onRefresh, fetchAreas, fetchLatestMergeUndo],
   );
 
-  return { areas, createArea, renameArea, deleteArea, deleteAreas, mergeAreas };
+  const undoMerge = useCallback(
+    async (areaId: string): Promise<void> => {
+      if (!tileUuid || !normalizedBaseUrl || !areaId) {
+        return;
+      }
+
+      const response = await fetch(
+        `${normalizedBaseUrl}/tiles/${encodeURIComponent(tileUuid)}/areas/${encodeURIComponent(areaId)}/undo-merge`,
+        { method: "POST" },
+      );
+
+      if (!response.ok) {
+        const detail = (await response.json().catch(() => ({}))) as { detail?: string };
+        throw new Error(detail.detail ?? `Undo merge failed (${response.status})`);
+      }
+
+      await fetchAreas();
+      await fetchLatestMergeUndo();
+      onRefresh();
+    },
+    [normalizedBaseUrl, tileUuid, onRefresh, fetchAreas, fetchLatestMergeUndo],
+  );
+
+  return { areas, createArea, renameArea, deleteArea, deleteAreas, mergeAreas, latestMergeUndo, undoMerge };
 }
