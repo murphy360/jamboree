@@ -191,6 +191,44 @@ def test_merge_area_updates_target_and_removes_sources(tmp_path):
     assert remaining[0].area_id == target.area_id
 
 
+def test_merge_area_preserves_concavity_when_possible(tmp_path):
+    store = make_store(tmp_path)
+    target = store.create_area(
+        "tile_1",
+        "Target Area",
+        [
+            AreaPolygonPoint(latitude=0.0, longitude=0.0),
+            AreaPolygonPoint(latitude=0.0, longitude=2.0),
+            AreaPolygonPoint(latitude=1.0, longitude=2.0),
+            AreaPolygonPoint(latitude=1.0, longitude=0.0),
+        ],
+    )
+    source = store.create_area(
+        "tile_1",
+        "Source Area",
+        [
+            AreaPolygonPoint(latitude=1.0, longitude=0.0),
+            AreaPolygonPoint(latitude=1.0, longitude=1.0),
+            AreaPolygonPoint(latitude=3.0, longitude=1.0),
+            AreaPolygonPoint(latitude=3.0, longitude=0.0),
+        ],
+    )
+
+    merged = store.merge_area(
+        tile_uuid="tile_1",
+        merge_into_area_id=target.area_id,
+        cluster_centers=[],
+        merge_source_area_ids=[source.area_id],
+    )
+
+    # Points from both original polygons remain inside.
+    assert point_in_polygon(0.5, 1.5, merged.polygon) is True
+    assert point_in_polygon(2.5, 0.5, merged.polygon) is True
+
+    # The top-right notch of the L-shape should remain outside.
+    assert point_in_polygon(2.5, 1.5, merged.polygon) is False
+
+
 def test_merge_area_promotes_imported_target_to_manual(tmp_path):
     store = make_store(tmp_path)
     target = store.create_area(

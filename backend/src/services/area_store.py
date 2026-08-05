@@ -12,6 +12,9 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
+from shapely.geometry import Polygon
+from shapely.ops import unary_union
+
 from src.services.models import AreaPolygonPoint, CustomArea, TileLocation
 
 
@@ -125,6 +128,56 @@ def point_in_polygon(
         j = i
 
     return inside
+
+
+def _to_shapely_polygon(points: list[tuple[float, float]]) -> Polygon | None:
+    if len(points) < 3:
+        return None
+
+    # Shapely uses (x, y) = (longitude, latitude).
+    geometry = Polygon([(lon, lat) for lat, lon in points])
+    if not geometry.is_valid:
+        geometry = geometry.buffer(0)
+    if geometry.is_empty or geometry.geom_type != "Polygon":
+        return None
+    return geometry
+
+
+def _polygon_exterior_to_latlon(polygon: Polygon) -> list[tuple[float, float]]:
+    coordinates = list(polygon.exterior.coords)
+    if len(coordinates) > 1 and coordinates[0] == coordinates[-1]:
+        coordinates = coordinates[:-1]
+    return [(lat, lon) for lon, lat in coordinates]
+
+
+def merge_polygons_preserving_shape(
+    polygons: list[list[tuple[float, float]]],
+    buffer_polygons: list[list[tuple[float, float]]] | None = None,
+) -> list[tuple[float, float]] | None:
+    geometries: list[Polygon] = []
+
+    for polygon_points in polygons:
+        geometry = _to_shapely_polygon(polygon_points)
+        if geometry is not None:
+            geometries.append(geometry)
+
+    for polygon_points in buffer_polygons or []:
+        geometry = _to_shapely_polygon(polygon_points)
+        if geometry is not None:
+            geometries.append(geometry)
+
+    if not geometries:
+        return None
+
+    merged = unary_union(geometries)
+    if merged.is_empty:
+        return None
+
+    if merged.geom_type == "Polygon":
+        return _polygon_exterior_to_latlon(merged)
+
+    # Multi-part results cannot be represented with the current single-polygon model.
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -316,19 +369,38 @@ class AreaStore:
             (point.latitude, point.longitude) for point in target.polygon
         ]
         points.extend((point.latitude, point.longitude) for point in cluster_centers)
+        source_polygons = [
+            [(point.latitude, point.longitude) for point in source.polygon]
+            for source in validated_sources
+        ]
+        merge_input_polygons = [
+            [(point.latitude, point.longitude) for point in target.polygon],
+            *source_polygons,
+        ]
+        hotspot_buffer_polygons: list[list[tuple[float, float]]] = []
         for center in hotspot_centers:
-            points.extend(
-                self._buffer_point(
-                    center.latitude,
-                    center.longitude,
-                    hotspot_buffer_meters,
-                )
+            buffered = self._buffer_point(
+                center.latitude,
+                center.longitude,
+                hotspot_buffer_meters,
             )
+            points.extend(buffered)
+            hotspot_buffer_polygons.append(buffered)
         for source in validated_sources:
             points.extend((point.latitude, point.longitude) for point in source.polygon)
 
-        hull = convex_hull(points)
-        polygon = [AreaPolygonPoint(latitude=lat, longitude=lon) for lat, lon in hull]
+        merged_outline = merge_polygons_preserving_shape(
+            merge_input_polygons,
+            hotspot_buffer_polygons,
+        )
+
+        if merged_outline is None:
+            merged_outline = convex_hull(points)
+
+        polygon = [
+            AreaPolygonPoint(latitude=lat, longitude=lon)
+            for lat, lon in merged_outline
+        ]
         polygon_json = json.dumps(
             [{"latitude": p.latitude, "longitude": p.longitude} for p in polygon]
         )
@@ -593,16 +665,22 @@ class AreaStore:
                 return (0, 0)
 
             all_points: list[tuple[float, float]] = []
+            merge_polygons: list[list[tuple[float, float]]] = []
             for row in rows:
                 polygon_points = json.loads(row["polygon_json"])
-                all_points.extend(
+                normalized = [
                     (point["latitude"], point["longitude"])
                     for point in polygon_points
-                )
+                ]
+                merge_polygons.append(normalized)
+                all_points.extend(normalized)
 
-            hull = convex_hull(all_points)
+            merged_outline = merge_polygons_preserving_shape(merge_polygons)
+            if merged_outline is None:
+                merged_outline = convex_hull(all_points)
+
             polygon_json = json.dumps(
-                [{"latitude": lat, "longitude": lon} for lat, lon in hull]
+                [{"latitude": lat, "longitude": lon} for lat, lon in merged_outline]
             )
             now = datetime.now(UTC).isoformat()
 
